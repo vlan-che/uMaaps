@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Offline Navigator</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet-image-transform@0.0.6/dist/leaflet.imagetransform.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none}
+html,body{width:100%;height:100%;background:#121212;color:#ff9800;font-family:monospace,sans-serif;overflow:hidden;display:flex;flex-direction:column}
+#top-bar{height:44px;background:#1e1e1e;display:flex;align-items:center;padding:0 6px;gap:6px;border-bottom:2px solid #ff9800;z-index:1000;flex:0 0 44px}
+.sq-btn{flex:0 0 38px;width:38px;height:38px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-weight:bold;font-size:13px;line-height:1;text-align:center;font-family:monospace}
+.sq-btn:active{background:#ff9800;color:#121212}
+#info-bar{flex:1 1 0;min-width:0;height:38px;background:#000;border:1px solid #ff9800;border-radius:3px;color:#ff9800;font-size:11px;font-weight:bold;line-height:36px;padding:0 8px;white-space:nowrap;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;cursor:pointer}
+#info-bar::-webkit-scrollbar{display:none}
+#info-bar.error{color:#ff5555;border-color:#ff5555}
+.side-menu{position:absolute;top:0;bottom:0;width:min(78vw,320px);background:rgba(20,20,20,.97);border:2px solid #ff9800;z-index:1500;display:flex;flex-direction:column;padding:10px;gap:8px;overflow-y:auto;-webkit-overflow-scrolling:touch;transition:transform .2s ease}
+.side-menu.left{left:0;border-left:none;transform:translateX(-105%)}
+.side-menu.right{right:0;border-right:none;transform:translateX(105%)}
+.side-menu.open{transform:translateX(0)}
+.menu-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid #ff9800;font-size:13px;font-weight:bold;flex:0 0 auto}
+.menu-header .hdr-title{flex:1 1 auto;text-align:left}
+.menu-title{font-size:13px;font-weight:bold;text-align:center;padding-bottom:6px;border-bottom:1px solid #ff9800}
+.menu-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 4px;font-size:12px}
+.menu-row .name{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.menu-btn{height:32px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:3px;font-family:monospace;font-weight:bold;font-size:11px;cursor:pointer;padding:0 6px}
+.menu-btn:active{background:#ff9800;color:#121212}
+.menu-btn:disabled{opacity:.4;pointer-events:none}
+.menu-btn.active{background:#ff9800;color:#121212}
+.submenu-body{transition:max-height .2s ease;display:none}
+.submenu-btn{margin-top:2px}
+.switch{position:relative;width:44px;height:22px;flex:0 0 44px}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#333;border:1px solid #ff9800;border-radius:22px;transition:.2s}
+.switch .slider:before{position:absolute;content:"";height:16px;width:16px;left:2px;bottom:2px;background:#ff9800;border-radius:50%;transition:.2s}
+.switch input:checked + .slider{background:#ff9800}
+.switch input:checked + .slider:before{transform:translateX(22px);background:#121212}
+#map-container{flex:1 1 0;position:relative;width:100%;background:#000;overflow:hidden}
+#map{width:100%;height:100%;background:#121212}
+#crosshair{position:absolute;top:50%;left:50%;width:32px;height:32px;transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;z-index:900;display:none}
+body.nav-on #crosshair{display:block}
+body.crosshair-hidden #crosshair{display:none}
+#compass{position:absolute;top:50%;left:50%;width:76px;height:76px;transform:translate(-50%,-50%) rotate(0deg);pointer-events:none;z-index:899;display:none;opacity:.7;transition:transform .12s linear;filter:drop-shadow(0 0 2px #000)}
+body.compass-on #compass{display:block}
+#beam{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:898;display:none}
+body.beam-on #beam{display:block}
+#dir-beam{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:897;display:none}
+body.dirbeam-on #dir-beam{display:block}
+.nav-table{position:absolute;left:0;right:0;background:rgba(0,0,0,.85);border-top:2px solid #ff9800;color:#ff9800;padding:5px 10px;font-family:monospace;font-size:11px;font-weight:bold;line-height:1.35;z-index:950;pointer-events:none;display:none;overflow:hidden}
+body.table5-on #table5{display:block}
+body.table6-on #table6{display:block}
+#table5{bottom:0}
+#table6{bottom:0}
+.nav-table table{border-collapse:collapse;width:100%;table-layout:fixed}
+.nav-table td{padding:0;vertical-align:top;white-space:pre}
+.nav-table td.lbl{width:34px;opacity:.85;color:#ff9800}
+.nav-table td.v1{width:50%;color:#ffcc66}
+.nav-table td.v2{width:50%;color:#88dd88;text-align:right}
+#bottom-bar{height:48px;background:#1e1e1e;display:flex;align-items:center;padding:0 6px;gap:5px;border-top:2px solid #ff9800;z-index:1000;flex:0 0 48px}
+#btn-track{flex:0 0 42px;width:42px;height:42px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:22px;line-height:1}
+#btn-track:active{background:#ff9800}
+.coord-box{flex:1 1 0;min-width:0;height:42px;background:#000;border:1px solid #ff9800;border-radius:3px;color:#ff9800;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:bold;line-height:1.15;cursor:pointer;white-space:nowrap;overflow:hidden;padding:0 4px}
+.coord-box:active{background:#1a1a1a}
+.coord-box .row{display:block}
+#btn-route{flex:0 0 42px;width:42px;height:42px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:22px;line-height:1}
+#btn-route:active{background:#ff9800;color:#121212}
+#btn-route.active{background:#ff9800;color:#121212}
+#toast{position:absolute;left:50%;bottom:120px;transform:translateX(-50%) translateY(6px);background:rgba(0,0,0,.88);border:1px solid #ff9800;border-radius:4px;color:#ff9800;padding:6px 12px;font-size:12px;font-weight:bold;font-family:monospace;white-space:nowrap;z-index:2000;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+input[type="file"]{display:none}
+.files-sep{height:1px;background:#ff9800;opacity:.55;margin:6px 0}
+.file-row .name{font-style:normal}
+.file-row.graphics .name{font-style:italic}
+.file-row.route.active{background:#ff9800;color:#121212;font-weight:bold}
+.file-row.route.active .name{color:#121212}
+.files-footer{display:flex;gap:6px;flex-wrap:wrap}
+.files-footer .menu-btn{flex:1 1 calc(50% - 3px);min-width:0}
+
+#zoom-strip{position:absolute;top:50%;right:5px;transform:translateY(-50%);width:auto;max-height:min(70vh,340px);background:transparent;border:none;z-index:1400;display:none;flex-direction:column;align-items:center;padding:0;gap:4px;border-radius:4px}
+body.zoom-strip-on #zoom-strip{display:flex}
+#zoom-strip .zs-btn{width:22px;height:22px;background:rgba(30,30,30,0.5);color:#ff9800;border:none;border-radius:3px;cursor:pointer;font-size:22px;font-weight:bold;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;text-shadow:0 0 1px #fff,0 0 1px #fff,0 0 1px #fff,0 0 1px #fff}
+#zoom-strip .zs-btn:active{background:rgba(255,152,0,0.9);color:#121212;text-shadow:none}
+#zoom-strip .zs-slider-wrap{flex:1 1 auto;display:flex;align-items:center;justify-content:center;width:100%;min-height:80px;max-height:200px}
+#zoom-strip input[type=range]{-webkit-appearance:none;appearance:none;writing-mode:vertical-lr;direction:rtl;width:24px;height:100%;background:transparent}
+#zoom-strip input[type=range]::-webkit-slider-runnable-track{width:6px;background:rgba(0,0,0,.55);border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+#zoom-strip input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#ff9800;border:2px solid #000;margin-left:-8px;cursor:pointer}
+#zoom-strip input[type=range]::-moz-range-track{width:6px;background:rgba(0,0,0,.55);border-radius:3px}
+#zoom-strip input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#ff9800;border:2px solid #000;cursor:pointer}
+
+#scale-corner{position:absolute;top:4px;right:4px;display:none;pointer-events:none;z-index:940}
+#map-scale-label{position:absolute;top:5px;left:5px;display:none;color:#000;font-family:monospace;font-size:11px;font-weight:bold;text-shadow:0 0 2px #fff,0 0 2px #fff;z-index:940;pointer-events:none;white-space:nowrap}
+#grid-step-label{position:absolute;top:6px;left:50%;transform:translateX(-50%);display:none;color:#000;font-family:monospace;font-size:11px;font-weight:bold;text-shadow:0 0 2px #fff,0 0 2px #fff;z-index:940;pointer-events:none;background:rgba(255,255,255,.5);padding:1px 6px;border-radius:3px}
+
+#places-panel{position:absolute;left:0;right:0;bottom:0;top:44px;background:rgba(20,20,20,.98);z-index:1600;display:none;flex-direction:column;padding:8px;gap:6px}
+#places-panel.open{display:flex}
+#places-panel .pp-title{font-size:13px;font-weight:bold;text-align:center;border-bottom:1px solid #ff9800;padding-bottom:6px}
+#places-panel .pp-row{display:flex;gap:6px}
+#places-panel input#places-input{flex:1;height:34px;background:#000;color:#ff9800;border:1px solid #ff9800;border-radius:3px;font-family:monospace;font-size:12px;padding:0 8px}
+#places-panel .pp-btn{height:34px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:3px;font-family:monospace;font-weight:bold;font-size:12px;padding:0 10px;cursor:pointer}
+#places-panel .pp-btn:active{background:#ff9800;color:#121212}
+#places-panel .pp-results{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#000;border:1px solid #ff9800;border-radius:3px;padding:4px}
+#places-panel .pp-result{padding:6px 8px;border-bottom:1px solid #333;cursor:pointer;white-space:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#places-panel .pp-result::-webkit-scrollbar{display:none}
+#places-panel .pp-result:hover,#places-panel .pp-result:active{background:#1e1e1e}
+#places-panel .pp-empty{padding:8px;opacity:.6;font-size:11px;text-align:center}
+</style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+</head>
+<body class="nav-on">
+
+<div id="top-bar">
+  <button class="sq-btn" id="btn-azimuth" title="Меню настроек"><span id="azimuth-val">--°</span></button>
+  <div id="info-bar">навигатор: готов</div>
+  <button class="sq-btn" id="btn-zoom" title="Инструменты"><span id="zoom-val">10</span></button>
+</div>
+
+<div id="map-container">
+  <div id="map"></div>
+
+  <div id="zoom-strip">
+    <button class="zs-btn" id="zs-in">+</button>
+    <div class="zs-slider-wrap"><input type="range" id="zs-slider" min="0" max="22" step="1" value="10"></div>
+    <button class="zs-btn" id="zs-out">−</button>
+  </div>
+
+  <svg id="scale-corner" viewBox="0 0 38 38" width="38" height="38">
+    <path d="M 1 1 L 37 1 L 37 37" fill="none" stroke="black" stroke-width="2"/>
+  </svg>
+  <div id="map-scale-label">—</div>
+  <div id="grid-step-label">—</div>
+
+  <svg id="beam">
+    <line id="beam-halo" x1="0" y1="0" x2="0" y2="0" stroke="#ffffff" stroke-width="4.5" stroke-dasharray="4 3" stroke-opacity="0.85"/>
+    <line id="beam-line" x1="0" y1="0" x2="0" y2="0" stroke="#ff9800" stroke-width="1.8" stroke-dasharray="4 3" stroke-opacity="0.95"/>
+  </svg>
+
+  <svg id="dir-beam">
+    <line id="dir-beam-halo" x1="0" y1="0" x2="0" y2="0" stroke="#ffffff" stroke-width="5" stroke-opacity="0.9"/>
+    <line id="dir-beam-line" x1="0" y1="0" x2="0" y2="0" stroke="#2962ff" stroke-width="2" stroke-opacity="0.95"/>
+  </svg>
+
+  <svg id="compass" viewBox="-50 -50 100 100">
+    <g>
+      <circle r="42" fill="rgba(255,152,0,0.12)" stroke="#ff9800" stroke-width="1" stroke-opacity=".55"/>
+      <polygon points="0,-38 8,-6 0,-12 -8,-6" fill="#ff9800" fill-opacity=".85" stroke="#000" stroke-width="1"/>
+      <text x="0" y="-44" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#ff9800" stroke="#000" stroke-width="0.4">N</text>
+    </g>
+  </svg>
+
+  <svg id="crosshair" viewBox="0 0 40 40">
+    <defs>
+      <filter id="ol">
+        <feMorphology in="SourceAlpha" result="D" operator="dilate" radius="1"/>
+        <feFlood flood-color="white" result="W"/>
+        <feComposite in="W" in2="D" operator="in" result="O"/>
+        <feMerge><feMergeNode in="O"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <g filter="url(#ol)" stroke="black" stroke-width="2" fill="none">
+      <circle cx="20" cy="20" r="5"/>
+      <line x1="20" y1="2" x2="20" y2="12"/>
+      <line x1="20" y1="28" x2="20" y2="38"/>
+      <line x1="2" y1="20" x2="12" y2="20"/>
+      <line x1="28" y1="20" x2="38" y2="20"/>
+    </g>
+  </svg>
+
+  <div class="nav-table" id="table5">
+    <table>
+      <tr><td class="lbl">п|т</td><td class="v1" id="t5-cross-1">--° --,---</td><td class="v2" id="t5-cross-2">--° --,---</td></tr>
+      <tr><td class="lbl">min</td><td class="v1" id="t5-min-1">--° --,---</td><td class="v2" id="t5-min-2">--° --,---</td></tr>
+      <tr><td class="lbl">max</td><td class="v1" id="t5-max-1">--° --,---</td><td class="v2" id="t5-max-2">--° --,---</td></tr>
+    </table>
+  </div>
+
+  <div class="nav-table" id="table6">
+    <table>
+      <tr><td class="lbl">н:</td><td class="v1" id="t6-start-1">--° --,---</td><td class="v2" id="t6-start-2">--° --,---</td></tr>
+      <tr><td class="lbl">б:</td><td class="v1" id="t6-line-1">--° --,---</td><td class="v2" id="t6-line-2">--° --,---</td></tr>
+      <tr><td class="lbl">к:</td><td class="v1" id="t6-end-1">--° --,---</td><td class="v2" id="t6-end-2">--° --,---</td></tr>
+    </table>
+  </div>
+
+  <div class="side-menu left" id="menu-left">
+    <div class="menu-header">
+      <span class="hdr-title">НАСТРОЙКИ</span>
+      <label class="switch" title="Раскрыть/скрыть все подменю"><input type="checkbox" id="sw-settings-expand"><span class="slider"></span></label>
+    </div>
+    <button class="menu-btn submenu-btn" data-submenu="carto" style="height:36px;font-size:12px">Карты</button>
+    <div class="submenu-body" id="sub-carto">
+      <div class="menu-row"><span class="name">Кэш:</span><button class="menu-btn" id="btn-cache-kind" style="flex:0 0 110px">FileTiles</button></div>
+      <div class="menu-row" style="padding-left:2px;gap:4px">
+        <button class="menu-btn" data-fmt="auto" style="flex:1;font-size:10px">Auto</button>
+        <button class="menu-btn" data-fmt="osmand" style="flex:1;font-size:10px">Osm/LC</button>
+      </div>
+      <div class="menu-row" style="padding-left:2px;gap:4px">
+        <button class="menu-btn" data-fmt="multi" style="flex:1;font-size:10px">Multi</button>
+        <button class="menu-btn" data-fmt="mbtiles" style="flex:1;font-size:10px">MBT</button>
+      </div>
+      <div class="menu-row" style="padding-left:2px;gap:4px">
+        <button class="menu-btn" id="btn-yxyz" style="flex:1;font-size:10px">XYZ</button>
+        <button class="menu-btn" id="btn-ytms" style="flex:1;font-size:10px">TMS</button>
+        <button class="menu-btn" id="btn-pako" style="flex:1;font-size:10px">Pako</button>
+      </div>
+      <div class="menu-row" style="padding-left:2px">
+        <select id="cache-layer" style="flex:1;height:26px;background:#2b2b2b;color:#ff9800;border:1px solid #ff9800;border-radius:3px;font-family:monospace"><option value="-1">слой: —</option></select>
+      </div>
+      <div class="menu-row"><span class="name">Офлайн:</span><button class="menu-btn" id="btn-load-cache" style="flex:0 0 90px">ВЫБРАТЬ</button></div>
+      <div class="menu-row" style="padding-left:2px">
+        <span class="name" id="offline-name" style="font-style:italic;opacity:.85">— не выбрана —</span>
+        <label class="switch" title="Скрыть карту офлайн"><input type="checkbox" id="sw-offline-visible" checked><span class="slider"></span></label>
+      </div>
+      <div class="menu-row"><span class="name">Онлайн:</span><button class="menu-btn" id="btn-load-online" style="flex:0 0 90px">ВЫБРАТЬ</button></div>
+      <div class="menu-row" style="padding-left:2px">
+        <span class="name" id="online-name" style="font-style:italic;opacity:.85">— не выбрана —</span>
+        <label class="switch" title="Скрыть онлайн-карту"><input type="checkbox" id="sw-online-visible" checked><span class="slider"></span></label>
+      </div>
+      <div class="menu-row"><span class="name">Привязка (kmz):</span><button class="menu-btn" id="btn-load-kmz2" style="flex:0 0 90px">ВЫБРАТЬ</button></div>
+      <div class="menu-row" style="padding-left:2px">
+        <span class="name" id="kmz-name" style="font-style:italic;opacity:.85">— не выбрана —</span>
+        <label class="switch" title="Скрыть KMZ"><input type="checkbox" id="sw-kmz-visible" checked><span class="slider"></span></label>
+      </div>
+    </div>
+    <button class="menu-btn submenu-btn" data-submenu="ctrl" style="height:36px;font-size:12px">Управление</button>
+    <div class="submenu-body" id="sub-ctrl">
+      <div class="menu-row"><span class="name">Подложка</span><label class="switch"><input type="checkbox" id="sw-gridlayer"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Наложение</span><label class="switch"><input type="checkbox" id="sw-coordgrid"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Локация</span><label class="switch"><input type="checkbox" id="sw-location" checked><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Прицел</span><label class="switch"><input type="checkbox" id="sw-crosshair" checked><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Компас</span><label class="switch"><input type="checkbox" id="sw-compass"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Направление</span><label class="switch"><input type="checkbox" id="sw-beam"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Курс</span><label class="switch"><input type="checkbox" id="sw-direction"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Масштаб</span><label class="switch"><input type="checkbox" id="sw-scale"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Сетка</span><label class="switch"><input type="checkbox" id="sw-grid"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Статика</span><label class="switch"><input type="checkbox" id="sw-circles-static"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Динамика</span><label class="switch"><input type="checkbox" id="sw-circles-dynamic"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Наименования</span><label class="switch"><input type="checkbox" id="sw-labels"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Стиль KML</span><label class="switch"><input type="checkbox" id="sw-kmlstyle"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Стиль JSON</span><label class="switch"><input type="checkbox" id="sw-jsonstyle"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Смещение min-max</span><label class="switch"><input type="checkbox" id="sw-table5"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name">Ориентиры н-б-к</span><label class="switch"><input type="checkbox" id="sw-table6"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name"> на min-max</span><label class="switch"><input type="checkbox" id="sw-vect5"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name"> на н-б-к</span><label class="switch"><input type="checkbox" id="sw-vect6"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name"> от локации</span><label class="switch"><input type="checkbox" id="sw-vect-place"><span class="slider"></span></label></div>
+      <div class="menu-row"><span class="name"> от прицела</span><label class="switch"><input type="checkbox" id="sw-vect-cross"><span class="slider"></span></label></div>
+    </div>
+    <button class="menu-btn submenu-btn" data-submenu="tools" style="height:36px;font-size:12px">Утилиты</button>
+    <div class="submenu-body" id="sub-tools"><div style="opacity:.7;font-size:11px;padding:4px">нет загруженных модулей</div></div>
+    <div style="margin-top:auto;padding-top:6px;border-top:1px solid #ff9800">
+      <button class="menu-btn" id="btn-close-left" style="width:100%">ЗАКРЫТЬ</button>
+    </div>
+  </div>
+
+  <div class="side-menu right" id="menu-right">
+    <div class="menu-header">
+      <span class="hdr-title">ГРАФИКА</span>
+      <label class="switch"><input type="checkbox" id="sw-draw-visible" checked><span class="slider"></span></label>
+    </div>
+    <button class="menu-btn" data-tool="Marker">Точки</button>
+    <button class="menu-btn" data-tool="Line">Линии</button>
+    <button class="menu-btn" data-tool="Polygon">Полигоны</button>
+    <button class="menu-btn" data-tool="Circle">Окружности</button>
+    <div style="height:6px;border-top:1px solid #ff9800"></div>
+    <button class="menu-btn" id="btn-draw-undo">Отменить</button>
+    <button class="menu-btn" id="btn-draw-clear">Очистить</button>
+    <button class="menu-btn" id="btn-draw-save">Сохранить</button>
+    <div style="margin-top:auto"><button class="menu-btn" id="btn-close-right" style="width:100%">ЗАКРЫТЬ</button></div>
+  </div>
+
+  <div class="side-menu left" id="menu-files">
+    <div class="menu-header">
+      <span class="hdr-title">ГЕОФАЙЛЫ</span>
+      <span id="files-counter" style="font-size:12px;opacity:.9">[ 0 | 0 ]</span>
+    </div>
+    <div id="files-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto;flex:1 1 0"></div>
+    <div class="files-sep"></div>
+    <div class="files-footer">
+      <button class="menu-btn" id="btn-graphics-open">ТРЕКИ</button>
+      <button class="menu-btn" id="btn-route-open">МАРШРУТЫ</button>
+      <button class="menu-btn" id="btn-files-clear">ОЧИСТИТЬ</button>
+      <button class="menu-btn" id="btn-files-close">ЗАКРЫТЬ</button>
+    </div>
+  </div>
+
+  <div class="side-menu right" id="menu-route"><div class="menu-title">МАРШРУТ</div></div>
+
+  <div id="places-panel">
+    <div class="pp-title">ПОИСК ПО ФАЙЛУ ОБЪЕКТОВ</div>
+    <div class="pp-row"><input id="places-input" type="text" placeholder="введите текст для поиска…"></div>
+    <div class="pp-row">
+      <button class="pp-btn" id="places-search" style="flex:1">ПОИСК</button>
+      <button class="pp-btn" id="places-close" style="flex:0 0 90px">ЗАКРЫТЬ</button>
+    </div>
+    <div class="pp-results" id="places-results"><div class="pp-empty">введите текст и нажмите «Поиск»</div></div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<div id="bottom-bar">
+  <button id="btn-track" title="Запись трека">☰</button>
+  <div class="coord-box" id="coord-dev"><span class="row" id="coord-dev-lat">--.------</span><span class="row" id="coord-dev-lon">--.------</span></div>
+  <div class="coord-box" id="coord-cross"><span class="row" id="coord-cross-lat">--.------</span><span class="row" id="coord-cross-lon">--.------</span></div>
+  <button id="btn-route" title="Маршрут">🔆</button>
+</div>
+
+<input type="file" id="file-cache" />
+<input type="file" id="file-dir" webkitdirectory directory multiple />
+<input type="file" id="file-graphics" accept=".gpx,.kml,.kmz,.geojson,.json" multiple />
+<input type="file" id="file-route" accept=".gpx,.kml,.kmz,.geojson,.json" multiple />
+<input type="file" id="file-kmz" accept=".kmz" />
+<input type="file" id="file-kmz2" accept=".kmz" />
+
+<script>
+/* ===== Утилиты ===== */
+function normLon(lon){if(!isFinite(lon))return lon;return ((lon+180)%360+360)%360-180;}
+function normLat(lat){if(!isFinite(lat))return lat;return Math.max(-90,Math.min(90,lat));}
+function bearingBetween(lat1,lon1,lat2,lon2){const f1=lat1*Math.PI/180,f2=lat2*Math.PI/180,dl=(lon2-lon1)*Math.PI/180;const y=Math.sin(dl)*Math.cos(f2);const x=Math.cos(f1)*Math.sin(f2)-Math.sin(f1)*Math.cos(f2)*Math.cos(dl);return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+function metersPerPixel(){const lat=map.getCenter().lat;return 156543.03392*Math.cos(lat*Math.PI/180)/Math.pow(2,map.getZoom());}
+function formatDist(m){if(!isFinite(m))return '—';if(m<1000)return `${m.toFixed(m<10?2:0)}м`;return `${(m/1000).toFixed(2)}км`;}
+function formatDistInt(m){if(!isFinite(m))return '—';if(m<1000)return `${Math.round(m)}м`;return `${Math.round(m/1000)}км`;}
+function roundNice(v){if(!isFinite(v)||v<=0)return 1;const exp=Math.floor(Math.log10(v));const mant=v/Math.pow(10,exp);let n;if(mant<1.5)n=1;else if(mant<3.5)n=2;else if(mant<7.5)n=5;else n=10;return n*Math.pow(10,exp);}
+function destinationNorth(lat,lon,meters){return {lat:lat+meters/111320,lon};}
+function destinationSouth(lat,lon,meters){return {lat:lat-meters/111320,lon};}
+window.normLon=normLon;window.normLat=normLat;
+
+const map = L.map('map',{zoomControl:false,attributionControl:false}).setView([55.751244,37.618423],10);
+map.createPane('coordGridPane');
+map.getPane('coordGridPane').style.zIndex=700;
+map.getPane('coordGridPane').style.pointerEvents='none';
+map.createPane('visualsPane');
+map.getPane('visualsPane').style.zIndex=620;
+map.getPane('visualsPane').style.pointerEvents='none';
+
+const geoLayers = new Map();
+let geoLayerCounter = 0;
+const routeFileLayers = new Map();
+let routeFileCounter = 0;
+
+let kmzLayer = null;
+const routeNavLayer = L.layerGroup().addTo(map);
+const drawLayerGroup = L.featureGroup().addTo(map);
+const vertexGroup    = L.layerGroup().addTo(map);
+
+const gridLinesGroup     = L.layerGroup().addTo(map);
+const circlesGroup       = L.layerGroup().addTo(map);
+const labelsGroup        = L.layerGroup().addTo(map);
+const routeInactiveGroup = L.layerGroup().addTo(map);
+const routeActiveGroup   = L.layerGroup().addTo(map);
+
+const tileMapStore = new Map();
+const tileBlobCache = new Map();
+let SQL=null, db=null, dbSchema=null, dbHasSource=false;
+let cacheKind = 'filetiles';
+let currentCacheName = '';
+let currentTotal = 0;
+const CONFIG_TILE_URL = '/tiles/{z}/{x}/{y}.png';
+
+const UI = {
+  format:'auto', yOrderFirst:'xyz', usePako:false, layer:-1,
+  compass:false, beam:false, direction:false, scale:false, grid:false,
+  circlesStatic:false, circlesDynamic:false, labels:false,
+  kmlstyle:false, jsonstyle:false,
+  table5:false, table6:false,
+  crosshairCentering:true, crosshairVisible:true, locationVisible:true, drawVisible:true,
+  vectPlace:true, vectCross:true, zoomStrip:false
+};
+
+let currentPos=null,deviceHeading=null,crosshairLat=0,crosshairLon=0;
+let spoofPos=null,realGpsPos=null;
+let lastTwoPositions=[];
+
+const infoBar=document.getElementById('info-bar');
+const toastEl=document.getElementById('toast');
+let toastTimer=null;
+function setInfo(text,isErr=false){infoBar.textContent=text;infoBar.classList.toggle('error',!!isErr);infoBar.scrollLeft=0;}
+function showToast(msg,ms=2000){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),ms);}
+async function copyText(t){
+  try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(t);return true;}}catch(e){}
+  try{const ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');document.body.removeChild(ta);return ok;}catch(e){return false;}
+}
+function fmtCoord(lat,lon){return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;}
+
+const zoomValEl=document.getElementById('zoom-val');
+const azimuthValEl=document.getElementById('azimuth-val');
+map.on('zoomend',()=>{zoomValEl.textContent=map.getZoom();const sl=document.getElementById('zs-slider');if(sl)sl.value=map.getZoom();});
+zoomValEl.textContent=map.getZoom();
+
+function closeAllMenus(except){
+  ['menu-left','menu-right','menu-files','menu-route','menu-track'].forEach(id=>{
+    if(id===except)return;
+    const el=document.getElementById(id);
+    if(el)el.classList.remove('open');
+  });
+}
+window.closeAllMenus=closeAllMenus;
+
+document.getElementById('btn-zoom').addEventListener('click',()=>{document.getElementById('menu-right').classList.add('open');closeAllMenus('menu-right');});
+document.getElementById('btn-azimuth').addEventListener('click',()=>{document.getElementById('menu-left').classList.add('open');closeAllMenus('menu-left');});
+infoBar.addEventListener('click',()=>{renderFileList();document.getElementById('menu-files').classList.add('open');closeAllMenus('menu-files');});
+document.getElementById('btn-close-left').addEventListener('click',()=>{document.getElementById('menu-left').classList.remove('open');});
+document.getElementById('btn-files-close').addEventListener('click',()=>{document.getElementById('menu-files').classList.remove('open');});
+
+const crosshair=document.getElementById('crosshair');
+const coordCrossLat=document.getElementById('coord-cross-lat');
+const coordCrossLon=document.getElementById('coord-cross-lon');
+const coordDevLat=document.getElementById('coord-dev-lat');
+const coordDevLon=document.getElementById('coord-dev-lon');
+
+function updateCrosshairCoords(){
+  const c=map.getCenter();
+  crosshairLat=normLat(c.lat);crosshairLon=normLon(c.lng);
+  coordCrossLat.textContent=crosshairLat.toFixed(6);
+  coordCrossLon.textContent=crosshairLon.toFixed(6);
+  refreshNavTables();
+  updateGrid();updateCircles();
+}
+map.on('move',updateCrosshairCoords);
+map.on('moveend',updateCrosshairCoords);
+updateCrosshairCoords();
+
+crosshair.addEventListener('click',(e)=>{e.stopPropagation();UI.crosshairCentering=!UI.crosshairCentering;showToast(UI.crosshairCentering?'прицел: притягивание вкл':'прицел: притягивание выкл');});
+
+document.getElementById('coord-dev').addEventListener('click',async()=>{
+  if(!currentPos){showToast('Нет данных GPS');return;}
+  const ok=await copyText(fmtCoord(currentPos.lat,currentPos.lon));
+  showToast(ok?'Координаты устройства скопированы':'Не удалось скопировать');
+});
+document.getElementById('coord-cross').addEventListener('click',async()=>{
+  const c=map.getCenter();
+  const ok=await copyText(fmtCoord(normLat(c.lat),normLon(c.lng)));
+  showToast(ok?'Координаты прицела скопированы':'Не удалось скопировать');
+});
+
+document.getElementById('sw-location').addEventListener('change',e=>{UI.locationVisible=e.target.checked;if(locationMarker)locationMarker.setStyle({opacity:e.target.checked?1:0});});
+document.getElementById('sw-crosshair').addEventListener('change',e=>{UI.crosshairVisible=e.target.checked;document.body.classList.toggle('crosshair-hidden',!UI.crosshairVisible);});
+document.getElementById('sw-compass').addEventListener('change',e=>{UI.compass=e.target.checked;document.body.classList.toggle('compass-on',UI.compass);if(UI.compass)attachOrientation();});
+document.getElementById('sw-beam').addEventListener('change',e=>{UI.beam=e.target.checked;document.body.classList.toggle('beam-on',UI.beam);updateBeam();});
+document.getElementById('sw-direction').addEventListener('change',e=>{UI.direction=e.target.checked;document.body.classList.toggle('dirbeam-on',UI.direction);updateDirectionBeam();});
+document.getElementById('sw-scale').addEventListener('change',e=>{UI.scale=e.target.checked;updateScale();});
+document.getElementById('sw-grid').addEventListener('change',e=>{UI.grid=e.target.checked;updateGrid();});
+document.getElementById('sw-circles-static').addEventListener('change',e=>{UI.circlesStatic=e.target.checked;updateCircles();});
+document.getElementById('sw-circles-dynamic').addEventListener('change',e=>{UI.circlesDynamic=e.target.checked;updateCircles();});
+document.getElementById('sw-labels').addEventListener('change',e=>{UI.labels=e.target.checked;redrawAllRoutes();});
+document.getElementById('sw-kmlstyle').addEventListener('change',e=>{
+  UI.kmlstyle=e.target.checked;
+  for(const id of geoLayers.keys())rebuildGraphicsLayer(id);
+});
+document.getElementById('sw-jsonstyle').addEventListener('change',e=>{
+  UI.jsonstyle=e.target.checked;
+  for(const id of geoLayers.keys())rebuildGraphicsLayer(id);
+});
+document.getElementById('sw-table5').addEventListener('change',e=>{UI.table5=e.target.checked;document.body.classList.toggle('table5-on',UI.table5);refreshNavTables();});
+document.getElementById('sw-table6').addEventListener('change',e=>{UI.table6=e.target.checked;document.body.classList.toggle('table6-on',UI.table6);refreshNavTables();});
+document.getElementById('sw-draw-visible').addEventListener('change',e=>{
+  UI.drawVisible=e.target.checked;
+  if(UI.drawVisible){if(!map.hasLayer(drawLayerGroup))drawLayerGroup.addTo(map);if(!map.hasLayer(vertexGroup))vertexGroup.addTo(map);}
+  else{if(map.hasLayer(drawLayerGroup))map.removeLayer(drawLayerGroup);if(map.hasLayer(vertexGroup))map.removeLayer(vertexGroup);}
+});
+document.getElementById('sw-vect-place').addEventListener('change',e=>{UI.vectPlace=e.target.checked;if(window.__navRefresh)window.__navRefresh();});
+document.getElementById('sw-vect-cross').addEventListener('change',e=>{UI.vectCross=e.target.checked;if(window.__navRefresh)window.__navRefresh();});
+
+const beamLine=document.getElementById('beam-line');
+const beamHalo=document.getElementById('beam-halo');
+function updateBeam(){
+  if(!UI.beam||!currentPos||deviceHeading==null){beamLine.style.display='none';beamHalo.style.display='none';return;}
+  const p=map.latLngToContainerPoint([currentPos.lat,currentPos.lon]);
+  const w=map.getSize().x,h=map.getSize().y;
+  const rad=(deviceHeading-90)*Math.PI/180;const len=Math.hypot(w,h);
+  const x2=p.x+Math.cos(rad)*len,y2=p.y+Math.sin(rad)*len;
+  [beamLine,beamHalo].forEach(el=>{el.setAttribute('x1',p.x);el.setAttribute('y1',p.y);el.setAttribute('x2',x2);el.setAttribute('y2',y2);});
+  beamLine.style.display='';beamHalo.style.display='';
+}
+map.on('move zoom',updateBeam);
+
+const dirBeamLine=document.getElementById('dir-beam-line');
+const dirBeamHalo=document.getElementById('dir-beam-halo');
+function updateDirectionBeam(){
+  if(!UI.direction||lastTwoPositions.length<2||!currentPos){dirBeamLine.style.display='none';dirBeamHalo.style.display='none';return;}
+  const p1=lastTwoPositions[0],p2=lastTwoPositions[1];
+  const bearing=bearingBetween(p1.lat,p1.lon,p2.lat,p2.lon);
+  const p=map.latLngToContainerPoint([currentPos.lat,currentPos.lon]);
+  const w=map.getSize().x,h=map.getSize().y;
+  const rad=(bearing-90)*Math.PI/180;const len=Math.hypot(w,h);
+  const x2=p.x+Math.cos(rad)*len,y2=p.y+Math.sin(rad)*len;
+  [dirBeamLine,dirBeamHalo].forEach(el=>{el.setAttribute('x1',p.x);el.setAttribute('y1',p.y);el.setAttribute('x2',x2);el.setAttribute('y2',y2);});
+  dirBeamLine.style.display='';dirBeamHalo.style.display='';
+}
+map.on('move zoom',updateDirectionBeam);
+
+const compassEl=document.getElementById('compass');
+let orientationAttached=false,orientationWatchdog=null,orientationSeen=false;
+function handleOrientation(e){
+  orientationSeen=true;
+  let h=null;
+  if(typeof e.webkitCompassHeading==='number'&&!isNaN(e.webkitCompassHeading))h=e.webkitCompassHeading;
+  else if(typeof e.alpha==='number'&&!isNaN(e.alpha))h=(360-e.alpha)%360;
+  if(h!=null){deviceHeading=h;azimuthValEl.textContent=`${Math.round(h)}°`;if(UI.compass)compassEl.style.transform=`translate(-50%,-50%) rotate(${-h}deg)`;if(UI.beam)updateBeam();refreshNavTables();}
+}
+function attachOrientation(){
+  if(orientationAttached)return;orientationAttached=true;
+  if('ondeviceorientationabsolute' in window)window.addEventListener('deviceorientationabsolute',handleOrientation,true);
+  window.addEventListener('deviceorientation',handleOrientation,true);
+  clearTimeout(orientationWatchdog);orientationWatchdog=setTimeout(()=>{if(!orientationSeen)setInfo('компас: датчики не отвечают',true);},2000);
+}
+
+let locationMarker=null;
+if('geolocation' in navigator){
+  navigator.geolocation.watchPosition(pos=>{
+    realGpsPos={lat:normLat(pos.coords.latitude),lon:normLon(pos.coords.longitude)};
+    currentPos=spoofPos?{lat:spoofPos.lat,lon:spoofPos.lon}:realGpsPos;
+    window.currentPos=currentPos;
+    lastTwoPositions.push({lat:currentPos.lat,lon:currentPos.lon});
+    if(lastTwoPositions.length>2)lastTwoPositions.shift();
+    coordDevLat.textContent=currentPos.lat.toFixed(6);
+    coordDevLon.textContent=currentPos.lon.toFixed(6);
+    if(!locationMarker){locationMarker=L.circleMarker([currentPos.lat,currentPos.lon],{radius:8,color:'#ff9800',weight:2,fill:false,opacity:UI.locationVisible?1:0}).addTo(map);}
+    else{locationMarker.setLatLng([currentPos.lat,currentPos.lon]);locationMarker.setStyle({opacity:UI.locationVisible?1:0});}
+    if(UI.crosshairCentering)map.panTo([currentPos.lat,currentPos.lon],{animate:false});
+    if(UI.beam)updateBeam();
+    if(UI.direction)updateDirectionBeam();
+    refreshNavTables();
+  },()=>{setInfo('GPS: ошибка',true);},{enableHighAccuracy:true,maximumAge:1000,timeout:10000});
+}
+
+const zsSlider=document.getElementById('zs-slider');
+const zsIn=document.getElementById('zs-in');
+const zsOut=document.getElementById('zs-out');
+if(zsSlider){
+  zsSlider.min=0;zsSlider.max=22;zsSlider.value=map.getZoom();
+  zsSlider.addEventListener('input',()=>{map.setZoom(parseInt(zsSlider.value,10));});
+  zsIn.addEventListener('click',()=>{const z=Math.min(22,map.getZoom()+1);map.setZoom(z);zsSlider.value=z;});
+  zsOut.addEventListener('click',()=>{const z=Math.max(0,map.getZoom()-1);map.setZoom(z);zsSlider.value=z;});
+  map.on('zoomend',()=>{zsSlider.value=map.getZoom();});
+}
+(function bindDrawLongPress(){
+  const btn=document.getElementById('btn-zoom');let timer=null,openedByLong=false;
+  function start(){openedByLong=false;timer=setTimeout(()=>{openedByLong=true;UI.zoomStrip=!UI.zoomStrip;document.body.classList.toggle('zoom-strip-on',UI.zoomStrip);setInfo(UI.zoomStrip?'полоса масштаба: вкл':'полоса масштаба: выкл');},600);}
+  function cancel(){clearTimeout(timer);}
+  btn.addEventListener('touchstart',start,{passive:true});
+  btn.addEventListener('touchend',cancel);
+  btn.addEventListener('touchmove',cancel);
+  btn.addEventListener('mousedown',start);
+  btn.addEventListener('mouseup',cancel);
+  btn.addEventListener('mouseleave',cancel);
+  btn.addEventListener('click',e=>{if(openedByLong){e.stopImmediatePropagation();e.preventDefault();openedByLong=false;}},true);
+})();
+
+function updateScale(){
+  const corner=document.getElementById('scale-corner');
+  const mapScaleLabel=document.getElementById('map-scale-label');
+  if(!UI.scale){corner.style.display='none';mapScaleLabel.style.display='none';return;}
+  corner.style.display='block';mapScaleLabel.style.display='block';
+  const mpp=metersPerPixel();const legPx=36;const distM=legPx*mpp;const denom=Math.round(mpp*96/0.0254);
+  const distKmStr=(distM/1000).toFixed(3).replace('.',',');
+  mapScaleLabel.textContent=`М 1:${denom} (${distKmStr} км)`;
+}
+map.on('zoomend moveend',updateScale);
+
+function updateGrid(){
+  gridLinesGroup.clearLayers();
+  const lbl=document.getElementById('grid-step-label');
+  if(!UI.grid){lbl.style.display='none';return;}
+  const center=map.getCenter();const bounds=map.getBounds();
+  const mpp=metersPerPixel();const mapWidthM=map.getSize().x*mpp;const mapHeightM=map.getSize().y*mpp;
+  const target=7;const rawStep=Math.max(mapWidthM,mapHeightM)/target;
+  const step=Math.pow(10,Math.round(Math.log10(rawStep)));
+  const latStep=step/111320;const lonStep=step/(111320*Math.cos(center.lat*Math.PI/180));
+  const cLat=center.lat,cLng=center.lng;
+  const sw=bounds.getSouthWest(),ne=bounds.getNorthEast();
+  let lat=Math.floor((sw.lat-cLat)/latStep)*latStep+cLat;
+  while(lat<=ne.lat){gridLinesGroup.addLayer(L.polyline([[lat,sw.lng],[lat,ne.lng]],{color:'#000',weight:2,opacity:0.8,interactive:false,pane:'overlayPane'}));lat+=latStep;}
+  let lng=Math.floor((sw.lng-cLng)/lonStep)*lonStep+cLng;
+  while(lng<=ne.lng){gridLinesGroup.addLayer(L.polyline([[sw.lat,lng],[ne.lat,lng]],{color:'#000',weight:2,opacity:0.8,interactive:false,pane:'overlayPane'}));lng+=lonStep;}
+  lbl.style.display='block';lbl.textContent=formatDistInt(step);
+}
+map.on('zoomend moveend',()=>updateGrid());
+
+function updateCircles(){
+  circlesGroup.clearLayers();
+  if(!UI.circlesStatic&&!UI.circlesDynamic)return;
+  const center=map.getCenter();
+  const mpp=metersPerPixel();
+  const halfWidthM=(map.getSize().x/2)*mpp;
+  function addCircle(radius,style,labelColor,position,fmt){
+    circlesGroup.addLayer(L.circle(center,{radius:radius,color:style,weight:2,fill:false,interactive:false}));
+    let lblLat;
+    if(position==='top')lblLat=destinationNorth(center.lat,center.lng,radius).lat;
+    else lblLat=destinationSouth(center.lat,center.lng,radius).lat;
+    const text=(fmt||formatDist)(radius);
+    circlesGroup.addLayer(L.marker([lblLat,center.lng],{
+      icon:L.divIcon({className:'',html:`<div style="color:${labelColor};font-family:monospace;font-weight:bold;font-size:11px;text-shadow:0 0 2px #fff,0 0 2px #fff;white-space:nowrap;transform:translateX(-50%)">R=${text}</div>`,iconSize:[120,14],iconAnchor:[60,7]}),
+      interactive:false
+    }));
+  }
+  if(UI.circlesStatic){
+    const r1=halfWidthM/3, r2=halfWidthM*2/3, r3=halfWidthM;
+    addCircle(r1,'#000','#000','top',formatDist);
+    addCircle(r2,'#000','#000','top',formatDist);
+    addCircle(r3,'#000','#000','top',formatDist);
+  }
+  if(UI.circlesDynamic){
+    const baseR=roundNice(halfWidthM/6);
+    [baseR,2*baseR,4*baseR,8*baseR].forEach(r=>addCircle(r,'#ff0000','#ff0000','bottom',formatDistInt));
+  }
+}
+map.on('zoomend moveend',()=>updateCircles());
+
+const fileCacheInput=document.getElementById('file-cache');
+const fileDirInput=document.getElementById('file-dir');
+const cacheLayerSel=document.getElementById('cache-layer');
+
+document.getElementById('btn-load-cache').addEventListener('click',async()=>{
+  if(cacheKind==='filetiles'){
+    const isAndroid=/Android/i.test(navigator.userAgent);
+    if(!isAndroid&&typeof window.showDirectoryPicker==='function'){
+      try{const dir=await window.showDirectoryPicker();await loadFileTilesFS(dir);return;}catch(err){if(err.name==='AbortError')return;setInfo(`кэш: ${err.message}`,true);return;}
+    }
+    fileDirInput.click();
+  } else {
+    fileCacheInput.setAttribute('accept',cacheKind==='mbtiles'?'.mbtiles,.mbtile,.sqlite,.sqlite3,.db,application/octet-stream':'.sqlitedb,.sqlite,.sqlite3,.db,application/octet-stream');
+    fileCacheInput.click();
+  }
+});
+fileDirInput.addEventListener('change',e=>{loadFileTilesFromInput(e.target.files);fileDirInput.value='';});
+fileCacheInput.addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  try{await loadSqlite(f);}catch(err){setInfo(`кэш: ${err.message||err.name}`,true);}finally{fileCacheInput.value='';}
+});
+
+function isTileName(n){return /^\d+\.(png|jpe?g|webp)(\.tiles?)?$/i.test(n);}
+function processTileFile(rel,file){
+  const parts=rel.split('/').filter(Boolean);
+  if(parts.length<3)return false;
+  const zr=parts[parts.length-3],xr=parts[parts.length-2],fn=parts[parts.length-1];
+  if(!/^\d+$/.test(zr)||!/^\d+$/.test(xr))return false;
+  if(!isTileName(fn))return false;
+  const m=fn.match(/^(\d+)/);if(!m)return false;
+  const key=`${+zr}/${+xr}/${+m[1]}`;
+  const old=tileMapStore.get(key);if(old)URL.revokeObjectURL(old);
+  tileMapStore.set(key,URL.createObjectURL(file));return true;
+}
+function clearFileTiles(){for(const u of tileMapStore.values())URL.revokeObjectURL(u);tileMapStore.clear();}
+async function loadFileTilesFS(dir){
+  clearFileTiles();currentCacheName=dir.name||'кэш';let rec=0,add=0;
+  async function walk(h,path=''){
+    for await(const e of h.values()){
+      if(e.kind==='file'){if(isTileName(e.name)){rec++;const f=await e.getFile();if(processTileFile(path+e.name,f))add++;}}
+      else if(e.kind==='directory')await walk(e,`${path}${e.name}/`);
+    }
+  }
+  await walk(dir);currentTotal=add;finalizeCache(rec,add);
+}
+function loadFileTilesFromInput(files){
+  clearFileTiles();if(!files||!files.length)return;
+  const rel=files[0].webkitRelativePath||'';currentCacheName=rel.split('/')[0]||'кэш';
+  let rec=0,add=0;
+  for(const f of files){if(!isTileName(f.name))continue;rec++;if(processTileFile(f.webkitRelativePath||f.name,f))add++;}
+  currentTotal=add;finalizeCache(rec,add);
+}
+function finalizeCache(rec,add){
+  if(rec===0){setInfo(`кэш: 0 тайлов - ${currentCacheName} (не найдены)`,true);return;}
+  if(add===0){setInfo(`кэш: 0 тайлов - ${currentCacheName} (нет z/x/y)`,true);return;}
+  customTileLayer.redraw();setInfo(`кэш: ${currentTotal} тайлов - ${currentCacheName}`);
+  const el=document.getElementById('offline-name');if(el)el.textContent=currentCacheName||'—';
+}
+function buildSchema(){
+  if(!db)return null;
+  const info=db.exec('PRAGMA table_info(tiles)');
+  if(!info.length||!info[0].values.length)return null;
+  const names=info[0].values.map(r=>String(r[1]).toLowerCase());
+  const pick=(...c)=>c.find(n=>names.includes(n))||null;
+  const presets={
+    osmand:{z:['z','zoom_level','zoom'],x:['x','tile_column','col'],y:['y','tile_row','row'],d:['image','tile_data','tile','data','blob','tile_blob'],s:['s','source']},
+    multi:{z:['z','zoom_level','zoom'],x:['x','tile_column','col'],y:['y','tile_row','row'],d:['image','tile_data','tile','data','blob','tile_blob'],s:['s','source']},
+    mbtiles:{z:['zoom_level','z','zoom'],x:['tile_column','x','col'],y:['tile_row','y','row'],d:['tile_data','image','tile','data','blob','tile_blob'],s:['source','s']},
+    auto:{z:['z','zoom_level','zoom','zoomlevel'],x:['x','tile_column','col','column'],y:['y','tile_row','row'],d:['image','tile_data','tile','data','blob','tile_blob','img'],s:['s','source']}
+  };
+  const p=presets[UI.format]||presets.auto;
+  const sch={zCol:pick(...p.z),xCol:pick(...p.x),yCol:pick(...p.y),dataCol:pick(...p.d),sourceCol:pick(...p.s)};
+  if(!sch.zCol||!sch.xCol||!sch.yCol||!sch.dataCol)return null;
+  return sch;
+}
+async function ensureSqlJs(){
+  if(SQL)return SQL;
+  if(typeof initSqlJs!=='function')throw new Error('sql.js не загрузился');
+  SQL=await initSqlJs({locateFile:f=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/'+f});
+  return SQL;
+}
+async function loadSqlite(file){
+  setInfo(`кэш: открываю ${file.name}…`);
+  const S=await ensureSqlJs();
+  const buf=await file.arrayBuffer();
+  if(db){try{db.close();}catch(e){}db=null;}
+  dbSchema=null;dbHasSource=false;
+  for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();
+  db=new S.Database(new Uint8Array(buf));
+  const tbl=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tiles'");
+  if(!tbl.length||!tbl[0].values.length){db.close();db=null;throw new Error('нет таблицы tiles');}
+  dbSchema=buildSchema();
+  if(!dbSchema){db.close();db=null;throw new Error('неизвестная схема');}
+  dbHasSource=!!dbSchema.sourceCol;
+  try{currentTotal=db.exec('SELECT COUNT(*) FROM tiles')[0].values[0][0];}catch(e){currentTotal=0;}
+  currentCacheName=file.name;populateLayerSelector();
+  if(!currentTotal){setInfo(`кэш: 0 тайлов - ${file.name}`,true);return;}
+  customTileLayer.redraw();
+  setInfo(`кэш: ${currentTotal} тайлов - ${file.name} (${dbSchema.zCol}/${dbSchema.xCol}/${dbSchema.yCol}/${dbSchema.dataCol})`);
+  const el=document.getElementById('offline-name');if(el)el.textContent=currentCacheName||'—';
+}
+function populateLayerSelector(){
+  cacheLayerSel.innerHTML='';
+  const none=document.createElement('option');none.value='-1';none.textContent='слой: —';cacheLayerSel.appendChild(none);
+  if(!dbHasSource){cacheLayerSel.disabled=true;return;}
+  const all=document.createElement('option');all.value='-1';all.textContent='слой: все';cacheLayerSel.appendChild(all);
+  try{const r=db.exec('SELECT DISTINCT s FROM tiles ORDER BY s');if(r.length)for(const row of r[0].values){const o=document.createElement('option');o.value=String(row[0]);o.textContent=`слой: ${row[0]}`;cacheLayerSel.appendChild(o);}}catch(e){}
+  cacheLayerSel.disabled=false;
+}
+cacheLayerSel.addEventListener('change',()=>{UI.layer=parseInt(cacheLayerSel.value,10);for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();customTileLayer.redraw();});
+
+document.querySelectorAll('#menu-left .menu-btn[data-fmt]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    UI.format=btn.dataset.fmt;
+    document.querySelectorAll('#menu-left .menu-btn[data-fmt]').forEach(b=>b.classList.toggle('active',b===btn));
+    if(db){const s=buildSchema();if(!s){setInfo('кэш: формат не подходит',true);return;}dbSchema=s;for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();customTileLayer.redraw();setInfo(`кэш: ${currentTotal} тайлов - ${currentCacheName} (${s.zCol}/${s.xCol}/${s.yCol}/${s.dataCol})`);}
+  });
+});
+const btnXYZ=document.getElementById('btn-yxyz');
+const btnTMS=document.getElementById('btn-ytms');
+function syncYButtons(){btnXYZ.classList.toggle('active',UI.yOrderFirst==='xyz');btnTMS.classList.toggle('active',UI.yOrderFirst==='tms');}
+btnXYZ.addEventListener('click',()=>{UI.yOrderFirst='xyz';syncYButtons();for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();customTileLayer.redraw();});
+btnTMS.addEventListener('click',()=>{UI.yOrderFirst='tms';syncYButtons();for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();customTileLayer.redraw();});
+syncYButtons();
+const btnPako=document.getElementById('btn-pako');
+btnPako.addEventListener('click',()=>{if(typeof pako==='undefined'){setInfo('pako: библиотека не загрузилась',true);return;}UI.usePako=!UI.usePako;btnPako.classList.toggle('active',UI.usePako);for(const v of tileBlobCache.values())if(v)URL.revokeObjectURL(v);tileBlobCache.clear();customTileLayer.redraw();setInfo(`pako: ${UI.usePako?'вкл':'выкл'}`);});
+
+const LocalTileLayer=L.TileLayer.extend({
+  createTile(coords,done){
+    const tile=document.createElement('img');tile.alt='';
+    const z=coords.z,x=coords.x,y=coords.y;const key=`${z}/${x}/${y}`;
+    let src=null;
+    if(tileMapStore.has(key))src=tileMapStore.get(key);
+    if(!src&&db&&dbSchema){if(tileBlobCache.has(key))src=tileBlobCache.get(key);else src=getTileFromDb(z,x,y);}
+    if(!src)src=CONFIG_TILE_URL.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+    tile.src=src;
+    L.DomEvent.on(tile,'load',L.Util.bind(this._tileOnLoad,this,done,tile));
+    L.DomEvent.on(tile,'error',L.Util.bind(this._tileOnError,this,done,tile));
+    return tile;
+  }
+});
+const customTileLayer=new LocalTileLayer(null,{minZoom:0,maxZoom:22,maxNativeZoom:19,tileSize:256,keepBuffer:4,errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'}).addTo(map);
+
+function sniffMime(b){
+  if(b.length>=8&&b[0]===0x89&&b[1]===0x50&&b[2]===0x4E&&b[3]===0x47)return 'image/png';
+  if(b.length>=3&&b[0]===0xFF&&b[1]===0xD8&&b[2]===0xFF)return 'image/jpeg';
+  if(b.length>=12&&b[0]===0x52&&b[1]===0x49&&b[2]===0x46&&b[3]===0x46&&b[8]===0x57&&b[9]===0x45&&b[10]===0x42&&b[11]===0x50)return 'image/webp';
+  return 'application/octet-stream';
+}
+function isGzip(b){return b.length>=2&&b[0]===0x1F&&b[1]===0x8B;}
+function maybeUngzip(b){if(!UI.usePako||!isGzip(b))return b;try{return pako.ungzip(b);}catch(e){return b;}}
+function getTileFromDb(z,x,yXYZ){
+  const key=`${z}/${x}/${yXYZ}`;
+  if(tileBlobCache.has(key))return tileBlobCache.get(key);
+  const yTMS=(1<<z)-1-yXYZ;
+  const order=UI.yOrderFirst==='tms'?[[z,x,yTMS],[z,x,yXYZ]]:[[z,x,yXYZ],[z,x,yTMS]];
+  let data=null;
+  for(const [zz,xx,yy] of order){data=queryTileData(zz,xx,yy);if(data)break;}
+  if(!data){tileBlobCache.set(key,null);return null;}
+  let bytes=(data instanceof Uint8Array)?data:new Uint8Array(data);
+  bytes=maybeUngzip(bytes);
+  const url=URL.createObjectURL(new Blob([bytes],{type:sniffMime(bytes)}));
+  tileBlobCache.set(key,url);return url;
+}
+function queryTileData(z,x,y){
+  if(!db||!dbSchema)return null;
+  const {xCol,yCol,zCol,dataCol,sourceCol}=dbSchema;
+  const useLayer=sourceCol&&UI.layer>=0;
+  const where=useLayer?`${zCol}=? AND ${xCol}=? AND ${yCol}=? AND ${sourceCol}=?`:`${zCol}=? AND ${xCol}=? AND ${yCol}=?`;
+  const params=useLayer?[z,x,y,UI.layer]:[z,x,y];
+  try{const stmt=db.prepare(`SELECT ${dataCol} FROM tiles WHERE ${where} LIMIT 1`);stmt.bind(params);let row=null;if(stmt.step())row=stmt.get()[0]||null;stmt.free();return row;}catch(e){return null;}
+}
+
+/* ===== Геофайлы ===== */
+const fileGraphicsInput=document.getElementById('file-graphics');
+const fileRouteInput=document.getElementById('file-route');
+const fileKmzInput=document.getElementById('file-kmz');
+document.getElementById('btn-graphics-open').addEventListener('click',()=>{fileGraphicsInput.click();});
+document.getElementById('btn-route-open').addEventListener('click',()=>{fileRouteInput.click();});
+
+const STYLE_DEFAULT_GRAPHICS={color:'#ff9800',weight:3,opacity:.85,pointRadius:6,pointFill:'#ff9800',pointColor:'#121212',pointWeight:1};
+const STYLE_DEFAULT_ROUTE={haloColor:'#000',haloWeight:4,color:'#ff9800',weight:2,pointRadius:4,pointFill:'#ff9800',pointColor:'#000',pointWeight:2};
+const STYLE_ACTIVE_ROUTE={haloColor:'#ff9800',haloWeight:4,color:'#ffffff',weight:2,pointRadius:4,pointFill:'#ffffff',pointColor:'#ff9800',pointWeight:2};
+
+/* --- Физическая ширина линии KML (метры) --- */
+function metersToPixelsKml(meters, zoom, lat){
+  const earthCircumference = 40075017;
+  const latRad = lat * Math.PI / 180;
+  const mpp = (earthCircumference * Math.cos(latRad)) / Math.pow(2, zoom + 8);
+  return meters / mpp;
+}
+function findPhysicalWidth(el){
+  if (!el) return null;
+  for (const child of el.children) {
+    const local = (child.localName || child.tagName || '').toLowerCase();
+    if (local === 'physicalwidth' || local.endsWith(':physicalwidth')) {
+      const v = parseFloat(child.textContent);
+      if (isFinite(v) && v > 0) return v;
+    }
+  }
+  return null;
+}
+function getFeatureCenterLat(feature){
+  const g = feature && feature.geometry;
+  if (!g) return 0;
+  if (g.type === 'Point') return g.coordinates[1];
+  if (g.type === 'LineString' && g.coordinates.length) {
+    const mid = g.coordinates[Math.floor(g.coordinates.length / 2)];
+    return mid[1];
+  }
+  if (g.type === 'MultiLineString' && g.coordinates.length && g.coordinates[0].length) {
+    const first = g.coordinates[0];
+    const mid = first[Math.floor(first.length / 2)];
+    return mid[1];
+  }
+  if (g.type === 'Polygon' && g.coordinates[0] && g.coordinates[0].length) {
+    let sy = 0, n = 0;
+    for (const c of g.coordinates[0]) { sy += c[1]; n++; }
+    return n ? sy / n : 0;
+  }
+  return 0;
+}
+function getLayerCenterLat(layer){
+  try {
+    if (layer && layer.getBounds) {
+      const b = layer.getBounds();
+      if (b && b.isValid()) return b.getCenter().lat;
+    }
+  } catch(e){}
+  if (layer && layer.feature) return getFeatureCenterLat(layer.feature);
+  return 0;
+}
+function applyPhysicalWidthToLayer(layer){
+  if (!layer || !layer.options || layer.options.physicalWidthMeters == null) return;
+  const lat = getLayerCenterLat(layer);
+  const px = metersToPixelsKml(layer.options.physicalWidthMeters, map.getZoom(), lat);
+  try { layer.setStyle({ weight: Math.max(0.3, px) }); } catch(e){}
+}
+function applyAllPhysicalWidths(){
+  for (const [, obj] of geoLayers) {
+    if (!obj || !obj.layer) continue;
+    obj.layer.eachLayer(sub => applyPhysicalWidthToLayer(sub));
+  }
+}
+
+/* KML */
+function parseKmlColor(c){
+  if(!c||c.length!==8)return null;
+  const a=parseInt(c.substring(0,2),16)/255;
+  const b=parseInt(c.substring(2,4),16);
+  const g=parseInt(c.substring(4,6),16);
+  const r=parseInt(c.substring(6,8),16);
+  return {hex:'#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join(''),a};
+}
+function parseKmlStyles(xml){
+  const styles={};
+  xml.querySelectorAll('Style').forEach(s=>{
+    const id=s.getAttribute('id');if(!id)return;
+    const st={};
+    const ls=s.querySelector('LineStyle');
+    if(ls){
+      const c=parseKmlColor(ls.querySelector('color')?.textContent);
+      const w=parseFloat(ls.querySelector('width')?.textContent);
+      if(c){st.lineColor=c.hex;st.lineOpacity=c.a;}
+      if(!isNaN(w))st.lineWidth=w;
+      /* физическая ширина (метры) — переопределяет пиксельную */
+      let pw=findPhysicalWidth(ls);
+      if(pw==null)pw=findPhysicalWidth(s);
+      if(pw!=null)st.physicalWidthMeters=pw;
+    } else {
+      const pw=findPhysicalWidth(s);
+      if(pw!=null)st.physicalWidthMeters=pw;
+    }
+    const ps=s.querySelector('PolyStyle');
+    if(ps){
+      const c=parseKmlColor(ps.querySelector('color')?.textContent);
+      if(c){st.fillColor=c.hex;st.fillOpacity=c.a;}
+    }
+    const is=s.querySelector('IconStyle');
+    if(is){
+      const c=parseKmlColor(is.querySelector('color')?.textContent);
+      if(c){st.pointFill=c.hex;st.pointOpacity=c.a;}
+      st.pointColor='#000';st.pointWeight=1;
+    }
+    styles[id]=st;
+  });
+  const styleMaps={};
+  xml.querySelectorAll('StyleMap').forEach(sm=>{
+    const id=sm.getAttribute('id');if(!id)return;
+    for(const p of sm.querySelectorAll('Pair')){
+      if(p.querySelector('key')?.textContent==='normal'){
+        const u=p.querySelector('styleUrl')?.textContent;
+        if(u&&u.startsWith('#')){const ref=styles[u.substring(1)];if(ref)styleMaps[id]=ref;}
+      }
+    }
+  });
+  return {styles,styleMaps};
+}
+function lookupKmlStyle(feature,kmlStyle){
+  if(!kmlStyle||!feature||!feature.properties)return null;
+  const url=feature.properties.styleUrl;
+  if(!url)return null;
+  const id=String(url).replace('#','');
+  return kmlStyle.styles[id]||kmlStyle.styleMaps[id]||null;
+}
+function featureStyleForKml(feature,kmlStyle){
+  const st=lookupKmlStyle(feature,kmlStyle);
+  if(st){
+    return {color:st.lineColor||'#ff9800',weight:st.lineWidth||3,opacity:(st.lineOpacity!=null?st.lineOpacity:0.85),fillColor:st.fillColor||undefined,fillOpacity:(st.fillColor?((st.fillOpacity!=null)?st.fillOpacity:0.4):0)};
+  }
+  return {color:'#ff9800',weight:3,opacity:0.85};
+}
+function pointStyleForKml(feature,kmlStyle){
+  const st=lookupKmlStyle(feature,kmlStyle);
+  if(st){return {color:st.pointColor||'#000',fillColor:st.pointFill||'#ff9800',weight:st.pointWeight||1,opacity:1,fillOpacity:1};}
+  return {color:'#121212',fillColor:'#ff9800',weight:1,opacity:1,fillOpacity:1};
+}
+
+/* JSON (Mapbox SimpleStyle / geojson.io) */
+const MAKI_TO_EMOJI={
+  harbor:'⚓', museum:'🏛', airport:'✈', hospital:'🏥', school:'🏫',
+  restaurant:'🍴', cafe:'☕', bar:'🍺', bank:'🏦', pharmacy:'💊',
+  police:'🚓', fire:'🚒', fuel:'⛽', park:'🌳', campsite:'⛺',
+  golf:'⛳', mountain:'⛰', beach:'🏖', lighthouse:'🗼', cinema:'🎬',
+  library:'📚', monument:'🗿', tower:'🗼', bridge:'🌉', water:'💧',
+  star:'⭐', heart:'❤', information:'ℹ', danger:'⚠', circle:'⚫'
+};
+function getJsonFeatureStyle(props){
+  props=props||{};
+  const s={};
+  if(props.stroke)s.color=props.stroke;
+  if(props['stroke-width']!=null)s.weight=parseFloat(props['stroke-width'])||3;
+  if(props['stroke-opacity']!=null)s.opacity=parseFloat(props['stroke-opacity']);
+  if(props.fill){s.fillColor=props.fill;}
+  if(props['fill-opacity']!=null)s.fillOpacity=parseFloat(props['fill-opacity']);
+  return s;
+}
+function createJsonMarker(feat,ll){
+  const props=feat.properties||{};
+  const color=props['marker-color']||'#ff9800';
+  const sizeName=props['marker-size']||'medium';
+  const radius=sizeName==='small'?4:sizeName==='large'?8:6;
+  const symbol=props['marker-symbol'];
+  if(symbol){
+    const emoji=MAKI_TO_EMOJI[symbol]||'📍';
+    return L.marker(ll,{
+      icon:L.divIcon({
+        className:'',
+        html:`<div style="font-size:${radius*3}px;line-height:1;filter:drop-shadow(0 0 2px #fff) drop-shadow(0 0 2px #fff);">${emoji}</div>`,
+        iconSize:[radius*3,radius*3],
+        iconAnchor:[radius*1.5,radius*1.5]
+      })
+    });
+  }
+  return L.circleMarker(ll,{color:'#000',fillColor:color,weight:1,radius,opacity:1,fillOpacity:1});
+}
+
+function createGraphicsLayer(geo,kmlStyle,isKml,isGeoJson){
+  return L.geoJSON(geo,{
+    style:feature=>{
+      if(isKml&&UI.kmlstyle&&kmlStyle)return featureStyleForKml(feature,kmlStyle);
+      if(isGeoJson&&UI.jsonstyle)return getJsonFeatureStyle(feature.properties);
+      return {color:STYLE_DEFAULT_GRAPHICS.color,weight:STYLE_DEFAULT_GRAPHICS.weight,opacity:STYLE_DEFAULT_GRAPHICS.opacity};
+    },
+    pointToLayer:(feat,ll)=>{
+      if(isKml&&UI.kmlstyle&&kmlStyle){
+        const ps=pointStyleForKml(feat,kmlStyle);
+        return L.circleMarker(ll,Object.assign({radius:STYLE_DEFAULT_GRAPHICS.pointRadius},ps));
+      }
+      if(isGeoJson&&UI.jsonstyle)return createJsonMarker(feat,ll);
+      return L.circleMarker(ll,{color:STYLE_DEFAULT_GRAPHICS.pointColor,fillColor:STYLE_DEFAULT_GRAPHICS.pointFill,weight:STYLE_DEFAULT_GRAPHICS.pointWeight,radius:STYLE_DEFAULT_GRAPHICS.pointRadius,opacity:1,fillOpacity:1});
+    },
+    onEachFeature:(feature,layer)=>{
+      if(isKml&&UI.kmlstyle&&kmlStyle){
+        const st=lookupKmlStyle(feature,kmlStyle);
+        if(st&&st.physicalWidthMeters!=null&&layer.setStyle){
+          layer.options.physicalWidthMeters=st.physicalWidthMeters;
+          applyPhysicalWidthToLayer(layer);
+        }
+      }
+    }
+  });
+}
+function rebuildGraphicsLayer(id){
+  const obj=geoLayers.get(id);
+  if(!obj)return;
+  const wasVisible=obj.visible&&map.hasLayer(obj.layer);
+  if(obj.layer&&map.hasLayer(obj.layer))map.removeLayer(obj.layer);
+  const isKml=obj.name.toLowerCase().endsWith('.kml');
+  const isGeoJson=obj.name.toLowerCase().endsWith('.geojson')||obj.name.toLowerCase().endsWith('.json');
+  obj.layer=createGraphicsLayer(obj.geoJSON,obj.kmlStyle,isKml,isGeoJson);
+  if(wasVisible||obj.visible)obj.layer.addTo(map);
+}
+
+fileGraphicsInput.addEventListener('change',async e=>{
+  const files=Array.from(e.target.files||[]);
+  for(const f of files)await loadGeoFile(f,'graphics');
+  fileGraphicsInput.value='';renderFileList();refreshNavTables();
+});
+fileRouteInput.addEventListener('change',async e=>{
+  const files=Array.from(e.target.files||[]);
+  for(const f of files)await loadGeoFile(f,'route');
+  fileRouteInput.value='';renderFileList();refreshNavTables();
+});
+fileKmzInput.addEventListener('change',async e=>{
+  const f=e.target.files&&e.target.files[0];if(!f)return;
+  try{await loadKmzOverlay(f);const el=document.getElementById('kmz-name');if(el)el.textContent=f.name;}
+  catch(err){setInfo(`KMZ: ${err.message}`,true);}finally{fileKmzInput.value='';}
+});
+
+async function loadGeoFile(file,role){
+  const name=file.name.toLowerCase();
+  setInfo(`открываю ${file.name}…`);
+  const content=await file.text();
+  let geo=null,kmlStyleData=null;
+  try{
+    if(name.endsWith('.geojson')||name.endsWith('.json'))geo=JSON.parse(content);
+    else if(name.endsWith('.gpx')||name.endsWith('.kml')){
+      const xml=new DOMParser().parseFromString(content,'text/xml');
+      if(xml.querySelector('parsererror'))throw new Error('битый XML');
+      geo=name.endsWith('.gpx')?toGeoJSON.gpx(xml):toGeoJSON.kml(xml);
+      if(name.endsWith('.kml'))kmlStyleData=parseKmlStyles(xml);
+    } else if(name.endsWith('.kmz')){await loadKmzOverlay(file);return;}
+    else{setInfo(`формат не поддержан: ${file.name}`,true);return;}
+  }catch(err){setInfo(`ошибка: ${err.message}`,true);return;}
+  if(!geo){setInfo('пустой файл',true);return;}
+  if(role==='graphics'){
+    const isKml=name.endsWith('.kml');
+    const isGeoJson=name.endsWith('.geojson')||name.endsWith('.json');
+    const layer=createGraphicsLayer(geo,kmlStyleData,isKml,isGeoJson).addTo(map);
+    const id=++geoLayerCounter;
+    geoLayers.set(id,{layer,name:file.name,visible:true,kind:'graphics',geoJSON:geo,kmlStyle:kmlStyleData});
+    setInfo(`треки: ${file.name} (${geoLayers.size})`);
+  } else {
+    const id=++routeFileCounter;
+    routeFileLayers.set(id,{name:file.name,visible:true,kind:'route',geoJSON:geo,kmlStyle:kmlStyleData});
+    setInfo(`маршрут: ${file.name} (${routeFileLayers.size})`);
+    redrawAllRoutes();
+  }
+  updateFilesCounter();
+}
+
+function drawRouteStyled(geo,group,st){
+  const segs=[],pts=[];
+  function walkLines(g){
+    if(!g)return;
+    if(g.type==='LineString')segs.push(g.coordinates.map(c=>({lat:c[1],lon:c[0]})));
+    else if(g.type==='MultiLineString')for(const s of g.coordinates)segs.push(s.map(c=>({lat:c[1],lon:c[0]})));
+    else if(g.type==='Point')pts.push({lat:g.coordinates[1],lon:g.coordinates[0]});
+    else if(g.type==='MultiPoint')for(const c of g.coordinates)pts.push({lat:c[1],lon:c[0]});
+    else if(g.type==='GeometryCollection')for(const gg of g.geometries)walkLines(gg);
+  }
+  if(geo.type==='FeatureCollection'){for(const f of geo.features||[])walkLines(f.geometry);}
+  else walkLines(geo.geometry||geo);
+  segs.forEach(seg=>{if(seg.length<2)return;group.addLayer(L.polyline(seg.map(p=>[p.lat,p.lon]),{color:st.haloColor,weight:st.haloWeight,opacity:1,interactive:false}));});
+  segs.forEach(seg=>{if(seg.length<2)return;group.addLayer(L.polyline(seg.map(p=>[p.lat,p.lon]),{color:st.color,weight:st.weight,opacity:1,interactive:false}));});
+  pts.forEach(p=>{group.addLayer(L.circleMarker([p.lat,p.lon],{radius:st.pointRadius,fillColor:st.pointFill,color:st.pointColor,weight:st.pointWeight,fillOpacity:1}));});
+}
+
+function drawRouteLabels(geo){
+  if(!UI.labels)return;
+  function featuresOf(g){
+    if(!g)return [];
+    if(g.type==='FeatureCollection')return g.features||[];
+    if(g.type==='Feature')return [g];
+    return [{type:'Feature',properties:{},geometry:g}];
+  }
+  for(const f of featuresOf(geo)){
+    const name=f.properties?.name;if(!name)continue;
+    const g=f.geometry;if(!g)continue;
+    let labelPoint=null,isPointFeature=false;
+    if(g.type==='Point'){labelPoint={lat:g.coordinates[1],lon:g.coordinates[0]};isPointFeature=true;}
+    else if(g.type==='LineString'&&g.coordinates.length){const mid=g.coordinates[Math.floor(g.coordinates.length/2)];labelPoint={lat:mid[1],lon:mid[0]};}
+    else if(g.type==='MultiLineString'&&g.coordinates.length){const first=g.coordinates[0];const mid=first[Math.floor(first.length/2)];labelPoint={lat:mid[1],lon:mid[0]};}
+    else if(g.type==='Polygon'&&g.coordinates[0].length){let sx=0,sy=0,n=0;for(const c of g.coordinates[0]){sx+=c[0];sy+=c[1];n++;}labelPoint={lat:sy/n,lon:sx/n};}
+    if(!labelPoint)continue;
+    if(isPointFeature){
+      labelsGroup.addLayer(L.marker([labelPoint.lat,labelPoint.lon],{
+        icon:L.divIcon({className:'',html:`<div style="color:black;font-family:monospace;font-size:11px;font-weight:bold;text-shadow:0 0 2px #fff,0 0 2px #fff;white-space:nowrap;">${name}</div>`,iconSize:[0,0],iconAnchor:[-6,7]}),
+        interactive:false
+      }));
+    } else {
+      labelsGroup.addLayer(L.marker([labelPoint.lat,labelPoint.lon],{
+        icon:L.divIcon({className:'',html:`<div style="color:black;font-family:monospace;font-size:11px;font-weight:bold;text-shadow:0 0 2px #fff,0 0 2px #fff;white-space:nowrap;transform:translateX(-50%)">${name}</div>`,iconSize:[120,14],iconAnchor:[60,7]}),
+        interactive:false
+      }));
+    }
+  }
+}
+
+function redrawAllRoutes(){
+  routeInactiveGroup.clearLayers();
+  routeActiveGroup.clearLayers();
+  labelsGroup.clearLayers();
+  for(const [id,obj] of routeFileLayers){
+    if(!obj.visible)continue;
+    const isActive=(id===activeRouteFileId);
+    const group=isActive?routeActiveGroup:routeInactiveGroup;
+    const st=isActive?STYLE_ACTIVE_ROUTE:STYLE_DEFAULT_ROUTE;
+    drawRouteStyled(obj.geoJSON,group,st);
+    drawRouteLabels(obj.geoJSON);
+  }
+}
+
+async function loadKmzOverlay(file){
+  setInfo(`KMZ: ${file.name}…`);
+  if(typeof JSZip==='undefined')throw new Error('JSZip не загрузился');
+  const zip=await JSZip.loadAsync(file);
+  const kmlName=Object.keys(zip.files).find(n=>/\.kml$/i.test(n));
+  if(!kmlName)throw new Error('нет .kml внутри');
+  const kmlText=await zip.file(kmlName).async('string');
+  const xml=new DOMParser().parseFromString(kmlText,'text/xml');
+  const go=xml.querySelector('GroundOverlay');
+  let imgUrl=null,bounds=null,quad=null;
+  if(go){
+    const href=go.querySelector('Icon > href')?.textContent||go.querySelector('Icon href')?.textContent;
+    if(href){
+      const cleanHref=href.split('#')[0].trim();
+      const imgEntry=Object.keys(zip.files).find(n=>n.endsWith(cleanHref)||n===cleanHref);
+      if(imgEntry){const blob=await zip.file(imgEntry).async('blob');imgUrl=URL.createObjectURL(blob);}
+    }
+    const llb=go.querySelector('LatLonBox');
+    if(llb){
+      const n=parseFloat(llb.querySelector('north')?.textContent);
+      const s=parseFloat(llb.querySelector('south')?.textContent);
+      const e=parseFloat(llb.querySelector('east')?.textContent);
+      const w=parseFloat(llb.querySelector('west')?.textContent);
+      if(!isNaN(n)&&!isNaN(s)&&!isNaN(e)&&!isNaN(w))bounds=[[s,w],[n,e]];
+    }
+    const llq=go.querySelector('LatLonQuad coordinates');
+    if(!bounds&&llq){
+      const nums=llq.textContent.trim().split(/\s+/).map(v=>{const p=v.split(',').map(Number);return {lon:p[0],lat:p[1]};});
+      if(nums.length>=4)quad=nums;
+    }
+  }
+  if(!imgUrl){
+    const imgName=Object.keys(zip.files).find(n=>/\.(png|jpg|jpeg|webp)$/i.test(n));
+    if(!imgName)throw new Error('нет изображения внутри');
+    const blob=await zip.file(imgName).async('blob');imgUrl=URL.createObjectURL(blob);
+  }
+  if(kmzLayer){map.removeLayer(kmzLayer);kmzLayer=null;}
+  if(quad&&L.imageTransform)kmzLayer=L.imageTransform(imgUrl,quad,{opacity:0.85,interactive:false}).addTo(map);
+  else if(bounds&&L.imageOverlay)kmzLayer=L.imageOverlay(imgUrl,bounds,{opacity:0.85,interactive:false}).addTo(map);
+  else throw new Error('не удалось определить привязку KMZ');
+  setInfo(`KMZ: ${file.name} (${quad?'quad':'box'})`);
+}
+
+let activeRouteFileId=null;
+function updateFilesCounter(){
+  const el=document.getElementById('files-counter');
+  if(el)el.textContent=`[ ${geoLayers.size} | ${routeFileLayers.size} ]`;
+}
+function renderFileList(){
+  const box=document.getElementById('files-list');box.innerHTML='';updateFilesCounter();
+  if(geoLayers.size===0&&routeFileLayers.size===0){box.innerHTML='<div style="opacity:.6;font-size:11px;padding:8px">нет открытых геофайлов</div>';return;}
+  for(const [id,obj] of geoLayers)box.appendChild(makeFileRow(id,obj,'graphics'));
+  if(geoLayers.size>0&&routeFileLayers.size>0){const sep=document.createElement('div');sep.className='files-sep';box.appendChild(sep);}
+  for(const [id,obj] of routeFileLayers)box.appendChild(makeFileRow(id,obj,'route'));
+}
+function makeFileRow(id,obj,kind){
+  const row=document.createElement('div');row.className='menu-row file-row '+kind;
+  if(kind==='route'&&activeRouteFileId===id)row.classList.add('active');
+  row.innerHTML=`<span class="name">${obj.name}</span><label class="switch"><input type="checkbox" ${obj.visible?'checked':''}><span class="slider"></span></label>`;
+  row.querySelector('input').addEventListener('change',ev=>{
+    const o=(kind==='graphics')?geoLayers.get(id):routeFileLayers.get(id);
+    o.visible=ev.target.checked;
+    if(kind==='graphics'){if(o.visible)o.layer.addTo(map);else map.removeLayer(o.layer);}
+    else{redrawAllRoutes();}
+  });
+  if(kind==='route'){
+    let holdTimer=null;
+    const startHold=()=>{holdTimer=setTimeout(()=>{
+      activeRouteFileId=id;window.activeRouteFileId=id;
+      redrawAllRoutes();renderFileList();
+      setInfo(`активный файл маршрута: ${obj.name}`);
+      showToast('файл маршрута выбран');
+    },600);};
+    const cancelHold=()=>{clearTimeout(holdTimer);};
+    row.addEventListener('touchstart',startHold,{passive:true});
+    row.addEventListener('touchend',cancelHold);
+    row.addEventListener('touchmove',cancelHold);
+    row.addEventListener('mousedown',startHold);
+    row.addEventListener('mouseup',cancelHold);
+    row.addEventListener('mouseleave',cancelHold);
+  }
+  return row;
+}
+document.getElementById('btn-files-clear').addEventListener('click',()=>{
+  const toRemoveG=[];const toRemoveR=[];
+  for(const [id,o] of geoLayers)if(!o.visible)toRemoveG.push(id);
+  for(const [id,o] of routeFileLayers)if(!o.visible)toRemoveR.push(id);
+  for(const id of toRemoveG){const o=geoLayers.get(id);if(o&&o.layer&&map.hasLayer(o.layer))map.removeLayer(o.layer);geoLayers.delete(id);}
+  for(const id of toRemoveR){routeFileLayers.delete(id);if(activeRouteFileId===id){activeRouteFileId=null;window.activeRouteFileId=null;}}
+  redrawAllRoutes();renderFileList();showToast(`очищено: ${toRemoveG.length+toRemoveR.length}`);
+});
+
+/* ===== Графика ===== */
+const drawHistory=[];let currentTool=null,currentShape=null,currentPoints=[],circleCenter=null,circlePreview=null;
+function clearVertexGroup(){vertexGroup.clearLayers();}
+function addVertexToGroup(latlng){L.circleMarker(latlng,{radius:6,color:'#ff9800',weight:3,fillColor:'#ff9800',fillOpacity:1}).addTo(vertexGroup);}
+function commitCurrentShape(keepTool){
+  if(currentShape){
+    const enough=(currentTool==='Line'&&currentPoints.length>=2)||(currentTool==='Polygon'&&currentPoints.length>=3);
+    if(enough){
+      if(currentTool==='Polygon'){const first=currentPoints[0];const last=currentPoints[currentPoints.length-1];if(first[0]!==last[0]||first[1]!==last[1]){currentPoints.push(first);currentShape.setLatLngs(currentPoints);}currentShape.setStyle({color:'#ff9800',weight:3,opacity:1,fillColor:'#ff9800',fillOpacity:0.25});}
+      if(map.hasLayer(currentShape))map.removeLayer(currentShape);
+      drawLayerGroup.addLayer(currentShape);drawHistory.push(currentShape);
+    } else {if(map.hasLayer(currentShape))map.removeLayer(currentShape);}
+  }
+  if(circlePreview&&map.hasLayer(circlePreview))map.removeLayer(circlePreview);
+  circlePreview=null;circleCenter=null;clearVertexGroup();currentShape=null;currentPoints=[];
+  if(!keepTool)currentTool=null;
+}
+function hardReset(){if(currentShape&&map.hasLayer(currentShape))map.removeLayer(currentShape);if(circlePreview&&map.hasLayer(circlePreview))map.removeLayer(circlePreview);clearVertexGroup();currentShape=null;currentPoints=[];circleCenter=null;circlePreview=null;currentTool=null;}
+function metersBetween(a,b){const R=6371008.8;const t=d=>d*Math.PI/180;const f1=t(a.lat),f2=t(b.lat);const df=f2-f1;const dl=t(b.lng-a.lng);const s=Math.sin(df/2)**2+Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+function circleToPolygon(center,radiusMeters,zoom){
+  const mPerPix=156543.03392*Math.cos(center.lat*Math.PI/180)/Math.pow(2,zoom);
+  const segLenM=Math.max(0.5,5*mPerPix);
+  let segs=Math.ceil(2*Math.PI*radiusMeters/segLenM);segs=Math.max(32,Math.min(360,segs));
+  const pts=[];const R=6371008.8;const t=d=>d*Math.PI/180;const u=r=>r*180/Math.PI;
+  for(let i=0;i<=segs;i++){const br=t(360*i/segs);const lat1=t(center.lat),lon1=t(center.lng);const dr=radiusMeters/R;const lat2=Math.asin(Math.sin(lat1)*Math.cos(dr)+Math.cos(lat1)*Math.sin(dr)*Math.cos(br));const lon2=lon1+Math.atan2(Math.sin(br)*Math.sin(dr)*Math.cos(lat1),Math.cos(dr)-Math.sin(lat1)*Math.sin(lat2));pts.push([u(lat2),normLon(u(lon2))]);}
+  return pts;
+}
+map.on('click',(e)=>{
+  if(!UI.drawVisible)return;
+  const ll=e.latlng;
+  if(currentTool==='Marker'){const cm=L.circleMarker(ll,{radius:6,color:'#ff9800',weight:3,fillColor:'#ff9800',fillOpacity:1});drawLayerGroup.addLayer(cm);cm.addTo(map);drawHistory.push(cm);setInfo(`точка добавлена (${drawHistory.length})`);return;}
+  if(currentTool==='Line'){currentPoints.push([ll.lat,ll.lng]);addVertexToGroup(ll);if(!currentShape)currentShape=L.polyline(currentPoints,{color:'#ff9800',weight:3,opacity:1}).addTo(map);else currentShape.setLatLngs(currentPoints);setInfo(`линия: точек ${currentPoints.length}`);return;}
+  if(currentTool==='Polygon'){
+    if(currentPoints.length>=3){
+      const first=L.latLng(currentPoints[0][0],currentPoints[0][1]);
+      const scr=map.latLngToContainerPoint(ll);const scf=map.latLngToContainerPoint(first);
+      const dx=scr.x-scf.x,dy=scr.y-scf.y;
+      if(Math.sqrt(dx*dx+dy*dy)<=22){
+        currentPoints.push(currentPoints[0]);currentShape.setLatLngs(currentPoints);
+        currentShape.setStyle({color:'#ff9800',weight:3,opacity:1,fillColor:'#ff9800',fillOpacity:0.25});
+        if(map.hasLayer(currentShape))map.removeLayer(currentShape);
+        drawLayerGroup.addLayer(currentShape);drawHistory.push(currentShape);
+        currentShape=null;currentPoints=[];clearVertexGroup();
+        setInfo(`полигон замкнут (${drawHistory.length})`);return;
+      }
+    }
+    currentPoints.push([ll.lat,ll.lng]);addVertexToGroup(ll);
+    if(!currentShape)currentShape=L.polygon(currentPoints,{color:'#ff9800',weight:3,opacity:1,fillColor:'#ff9800',fillOpacity:0.25}).addTo(map);
+    else currentShape.setLatLngs(currentPoints);
+    setInfo(`полигон: точек ${currentPoints.length}`);return;
+  }
+  if(currentTool==='Circle'){
+    if(!circleCenter){circleCenter={lat:ll.lat,lng:ll.lng};circlePreview=L.circleMarker(ll,{radius:5,color:'#ff9800',weight:3,fillColor:'#ff9800',fillOpacity:1}).addTo(map);setInfo('окружность: тапни второй раз');return;}
+    const radiusM=metersBetween(circleCenter,ll);const poly=circleToPolygon(circleCenter,radiusM,map.getZoom());
+    if(circlePreview){map.removeLayer(circlePreview);circlePreview=null;}
+    const cp=L.polygon(poly,{color:'#ff9800',weight:3,opacity:1,fillColor:'#ff9800',fillOpacity:0.25});drawLayerGroup.addLayer(cp);cp.addTo(map);drawHistory.push(cp);
+    setInfo(`окружность R ≈ ${(radiusM/1000).toFixed(3)} км`);circleCenter=null;return;
+  }
+});
+document.querySelectorAll('#menu-right .menu-btn[data-tool]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    if(!UI.drawVisible){showToast('графика скрыта');return;}
+    const t=btn.dataset.tool;commitCurrentShape(false);hardReset();currentTool=t;
+    document.getElementById('menu-right').classList.remove('open');
+    const labelMap={'Marker':'Точки','Line':'Линии','Polygon':'Полигоны','Circle':'Окружность'};
+    setInfo(`графика: ${labelMap[t]||t} — тапай по карте`);
+  });
+});
+document.getElementById('btn-draw-undo').addEventListener('click',()=>{
+  if(currentShape||circleCenter||vertexGroup.getLayers().length){hardReset();setInfo('графика: незавершённое отменено');document.getElementById('menu-right').classList.remove('open');return;}
+  const last=drawHistory.pop();
+  if(!last){showToast('нечего отменять');}else{drawLayerGroup.removeLayer(last);if(map.hasLayer(last))map.removeLayer(last);setInfo('отменено последнее действие');}
+  document.getElementById('menu-right').classList.remove('open');
+});
+document.getElementById('btn-draw-clear').addEventListener('click',()=>{hardReset();drawLayerGroup.clearLayers();drawHistory.length=0;setInfo('графика: очищено');document.getElementById('menu-right').classList.remove('open');});
+document.getElementById('btn-draw-save').addEventListener('click',()=>{
+  commitCurrentShape(true);
+  const gj=drawLayerGroup.toGeoJSON();
+  if(!gj.features||gj.features.length===0){showToast('нечего сохранять');return;}
+  const stamp=fileStamp();const baseName=`Графика_${stamp}`;
+  downloadBlob(JSON.stringify(gj,null,2),`${baseName}.geojson`,'application/geo+json');
+  downloadBlob(gjToKml(gj),`${baseName}.kml`,'application/vnd.google-earth.kml+xml');
+  downloadBlob(gjToGpx(gj),`${baseName}.gpx`,'application/gpx+xml');
+  setInfo(`сохранено: ${baseName}.*`);document.getElementById('menu-right').classList.remove('open');
+});
+document.getElementById('btn-close-right').addEventListener('click',()=>{commitCurrentShape(false);document.getElementById('menu-right').classList.remove('open');});
+
+function downloadBlob(data,filename,mime='application/octet-stream'){const blob=new Blob([data],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function fileStamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;}
+function gjToKml(gj){
+  const lines=['<?xml version="1.0" encoding="UTF-8"?>','<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'];
+  for(const f of gj.features||[]){if(!f.geometry)continue;lines.push('<Placemark>');const g=f.geometry;
+    if(g.type==='Point')lines.push(`<Point><coordinates>${g.coordinates[0]},${g.coordinates[1]},0</coordinates></Point>`);
+    else if(g.type==='LineString')lines.push('<LineString><coordinates>'+g.coordinates.map(c=>`${c[0]},${c[1]},0`).join(' ')+'</coordinates></LineString>');
+    else if(g.type==='Polygon')lines.push('<Polygon><outerBoundaryIs><LinearRing><coordinates>'+g.coordinates[0].map(c=>`${c[0]},${c[1]},0`).join(' ')+'</coordinates></LinearRing></outerBoundaryIs></Polygon>');
+    lines.push('</Placemark>');}
+  lines.push('</Document></kml>');return lines.join('\n');
+}
+function gjToGpx(gj){
+  const lines=['<?xml version="1.0" encoding="UTF-8"?>','<gpx version="1.1" creator="OfflineNavigator" xmlns="http://www.topografix.com/GPX/1/1">'];
+  let trkIdx=1;
+  for(const f of gj.features||[]){if(!f.geometry)continue;const g=f.geometry;
+    if(g.type==='Point')lines.push(`<wpt lat="${g.coordinates[1]}" lon="${g.coordinates[0]}"></wpt>`);
+    else if(g.type==='LineString'){const nm=(f.properties&&f.properties.name)||('track '+trkIdx);lines.push(`<trk><name>${nm}</name><trkseg>`);for(const c of g.coordinates)lines.push(`<trkpt lat="${c[1]}" lon="${c[0]}"></trkpt>`);lines.push('</trkseg></trk>');trkIdx++;}
+    else if(g.type==='Polygon'){const nm=(f.properties&&f.properties.name)||('track '+trkIdx);lines.push(`<trk><name>${nm}</name><trkseg>`);for(const c of g.coordinates[0])lines.push(`<trkpt lat="${c[1]}" lon="${c[0]}"></trkpt>`);lines.push('</trkseg></trk>');trkIdx++;}}
+  lines.push('</gpx>');return lines.join('\n');
+}
+
+document.getElementById('btn-route').addEventListener('click',()=>{
+  const menu=document.getElementById('menu-route');menu.classList.add('open');closeAllMenus('menu-route');
+  if(window.setRouteButtonState)window.setRouteButtonState(!!(window.guidanceActive));
+});
+function setRouteButtonState(active){const btn=document.getElementById('btn-route');btn.textContent=active?'🔁':'🔆';window.guidanceActive=!!active;}
+window.setRouteButtonState=setRouteButtonState;
+function setTrackButtonSymbol(sym){document.getElementById('btn-track').textContent=sym;}
+window.setTrackButtonSymbol=setTrackButtonSymbol;
+
+(function setupSettingsMenu(){
+  const expandSw=document.getElementById('sw-settings-expand');
+  const submenuButtons=document.querySelectorAll('.submenu-btn');
+  const submenuBodies={carto:document.getElementById('sub-carto'),ctrl:document.getElementById('sub-ctrl'),tools:document.getElementById('sub-tools')};
+  function showBody(name,show){const el=submenuBodies[name];if(!el)return;el.style.display=show?'block':'none';}
+  function collapseOthers(except){for(const key of Object.keys(submenuBodies)){if(key!==except)showBody(key,false);}submenuButtons.forEach(b=>{if(b.dataset.submenu!==except)b.classList.remove('active');});}
+  submenuButtons.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const name=btn.dataset.submenu;const el=submenuBodies[name];
+      const isOpen=el.style.display==='block';
+      if(isOpen){showBody(name,false);btn.classList.remove('active');}
+      else{collapseOthers(name);showBody(name,true);btn.classList.add('active');}
+    });
+  });
+  expandSw.addEventListener('change',e=>{const allOn=e.target.checked;for(const key of Object.keys(submenuBodies))showBody(key,allOn);submenuButtons.forEach(b=>b.classList.toggle('active',allOn));});
+})();
+
+const URL_TRANSFORMS=[
+  function transformSasPlanet(ctx){if(!/\{\$/.test(ctx.url))return null;let u=ctx.url.replace(/\{\$sasz\}/g,'{z}').replace(/\{\$sasx\}/g,'{x}').replace(/\{\$sasy\}/g,'{y}').replace(/\{\$z\}/g,'{z}').replace(/\{\$x\}/g,'{x}').replace(/\{\$y\}/g,'{y}').replace(/\{\$serverpart\}/g,'{s}');return {url:u,subdomains:ctx.subdomains||['a','b','c','d']};},
+  function transformOsmAndOrder(ctx){if(!/\{[012]\}/.test(ctx.url))return null;let u=ctx.url.replace(/\{0\}/g,'{z}').replace(/\{1\}/g,'{x}').replace(/\{2\}/g,'{y}');return {url:u,subdomains:ctx.subdomains};},
+  function transformSubdomainRange(ctx){const m=ctx.url.match(/\{([a-zA-Z0-9])-([a-zA-Z0-9])\}/);if(!m)return null;const start=m[1].charCodeAt(0),end=m[2].charCodeAt(0);const subs=[];for(let i=start;i<=end;i++)subs.push(String.fromCharCode(i));const u=ctx.url.replace(/\{[a-zA-Z0-9]-[a-zA-Z0-9]\}/g,'{s}');return {url:u,subdomains:subs};},
+  function transformGoogleDirect(ctx){if(!/\/\/mt\{[0-9]-[0-9]\}\.google\.com/i.test(ctx.url))return null;const u=ctx.url.replace(/\/\/mt\{[0-9]-[0-9]\}\.google\.com/i,'//mt0.google.com');return {url:u,subdomains:['']};},
+  function transformYandexSattelite(ctx){if(!/\/\/sat0\{[0-9]-[0-9]\}\.maps\.yandex\.net/i.test(ctx.url))return null;const u=ctx.url.replace(/sat0\{[0-9]-[0-9]\}/i,'sat{s}');return {url:u,subdomains:['01','02','03','04']};}
+];
+function normalizeTileUrlTemplate(url){let ctx={url,subdomains:null};for(const tr of URL_TRANSFORMS){const r=tr(ctx);if(r)ctx={url:r.url,subdomains:r.subdomains||ctx.subdomains};}const ta=document.createElement('textarea');ta.innerHTML=ctx.url;return {url:ta.value,subdomains:ctx.subdomains||['a','b','c']};}
+async function loadMapsList(){
+  try{
+    const resp=await fetch('modules/maps.txt',{cache:'no-cache'});
+    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+    let txt=await resp.text();const ta=document.createElement('textarea');ta.innerHTML=txt;txt=ta.value;
+    const lines=txt.split(/\r?\n/);const list=[];
+    for(const line of lines){const s=line.trim();if(!s)continue;const m=s.match(/^(\d+)\.\s*(.+?)\s*<(.+?)>(?:\s*\[(.*?)\])?\s*\]?\s*$/);if(!m)continue;
+      const [,num,name,rawUrl,opts]=m;
+      let layer='base',minZoom=0,maxZoom=19,tileSize=256;
+      if(opts){opts.split(/\s+/).forEach(tok=>{if(tok==='base'||tok==='overlay')layer=tok;else if(tok.startsWith('z=')){const [a,b]=tok.slice(2).split('..').map(Number);if(isFinite(a))minZoom=a;if(isFinite(b))maxZoom=b;}else if(tok.startsWith('tile=')){const v=Number(tok.slice(5));if(isFinite(v))tileSize=v;}});}
+      const norm=normalizeTileUrlTemplate(rawUrl.trim());
+      list.push({num:parseInt(num,10),name:name.trim(),url:norm.url,subdomains:norm.subdomains,layer,minZoom,maxZoom,tileSize});
+    }
+    return list;
+  }catch(err){setInfo(`maps.txt: ${err.message}`,true);return [];}
+}
+let onlineBaseLayer=null,onlineOverlayLayer=null,mapsListCache=null;
+async function chooseOnlineMap(){
+  if(!mapsListCache)mapsListCache=await loadMapsList();
+  if(!mapsListCache.length){showToast('maps.txt пуст или не найден');return null;}
+  const labels=mapsListCache.map(m=>`${m.num}. ${m.name} [${m.layer} z=${m.minZoom}..${m.maxZoom}]`);
+  const idxStr=prompt('Выберите карту:\n\n'+labels.join('\n')+'\n\nВведите номер:');
+  const idx=parseInt(idxStr,10);if(!idx)return null;
+  const found=mapsListCache.find(m=>m.num===idx);if(!found){showToast('карта не найдена');return null;}
+  const opts={minZoom:found.minZoom,maxZoom:found.maxZoom,subdomains:found.subdomains||['a','b','c'],tileSize:found.tileSize,referrerPolicy:'no-referrer-when-downgrade',errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'};
+  const layer=L.tileLayer(found.url,opts);
+  if(found.layer==='overlay'){if(onlineOverlayLayer&&map.hasLayer(onlineOverlayLayer))map.removeLayer(onlineOverlayLayer);onlineOverlayLayer=layer.addTo(map);onlineOverlayLayer.setZIndex(500);}
+  else{if(onlineBaseLayer&&map.hasLayer(onlineBaseLayer))map.removeLayer(onlineBaseLayer);onlineBaseLayer=layer.addTo(map);onlineBaseLayer.setZIndex(200);}
+  const el=document.getElementById('online-name');if(el)el.textContent=found.name+(found.layer==='overlay'?' (оверлей)':'');
+  setInfo(`онлайн-карта: ${found.name} [${found.layer} z=${found.minZoom}..${found.maxZoom}]`);
+  return found;
+}
+document.getElementById('btn-load-online').addEventListener('click',()=>{chooseOnlineMap();});
+document.getElementById('sw-online-visible').addEventListener('change',e=>{
+  const on=e.target.checked;
+  if(onlineBaseLayer){if(on&&!map.hasLayer(onlineBaseLayer))map.addLayer(onlineBaseLayer);if(!on&&map.hasLayer(onlineBaseLayer))map.removeLayer(onlineBaseLayer);}
+  if(onlineOverlayLayer){if(on&&!map.hasLayer(onlineOverlayLayer))map.addLayer(onlineOverlayLayer);if(!on&&map.hasLayer(onlineOverlayLayer))map.removeLayer(onlineOverlayLayer);}
+});
+document.getElementById('sw-offline-visible').addEventListener('change',e=>{if(customTileLayer._container)customTileLayer._container.style.display=e.target.checked?'':'none';});
+document.getElementById('btn-load-kmz2').addEventListener('click',()=>{document.getElementById('file-kmz2').click();});
+document.getElementById('file-kmz2').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{await loadKmzOverlay(f);const el=document.getElementById('kmz-name');if(el)el.textContent=f.name;}catch(err){setInfo(`KMZ: ${err.message}`,true);}finally{e.target.value='';}});
+document.getElementById('sw-kmz-visible').addEventListener('change',e=>{if(!kmzLayer)return;if(e.target.checked){if(!map.hasLayer(kmzLayer))kmzLayer.addTo(map);}else{if(map.hasLayer(kmzLayer))map.removeLayer(kmzLayer);}});
+(function cacheKindMenu(){
+  const btn=document.getElementById('btn-cache-kind');
+  const values=['filetiles','mbtiles','sqlitedb'];const labels=['FileTiles','MBTiles','SQLiteDB'];
+  btn.addEventListener('click',()=>{
+    const listText=labels.map((l,i)=>`${i+1}. ${l}`).join('\n');
+    const answer=prompt('Выберите тип кэша:\n\n'+listText+'\n\nВведите номер:');
+    const idx=parseInt(answer,10);if(!idx||idx<1||idx>values.length)return;
+    const chosen=values[idx-1];if(chosen===cacheKind)return;
+    cacheKind=chosen;btn.textContent=labels[idx-1];setInfo(`тип кэша: ${labels[idx-1]}`);
+  });
+})();
+
+const GridLayer=L.GridLayer.extend({
+  createTile:function(coords){
+    const tile=document.createElement('canvas');const size=this.getTileSize();tile.width=size.x;tile.height=size.y;const ctx=tile.getContext('2d');
+    ctx.fillStyle='#000';ctx.fillRect(0,0,size.x,size.y);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(1,1,size.x-2,size.y-2);
+    ctx.fillStyle='#fff';ctx.font='bold 11px monospace';ctx.fillText(`${coords.z}/${coords.x}/${coords.y}`,6,16);
+    return tile;
+  }
+});
+let gridLayerInstance=null;
+document.getElementById('sw-gridlayer').addEventListener('change',e=>{
+  if(e.target.checked){if(!gridLayerInstance)gridLayerInstance=new GridLayer({minZoom:0,maxZoom:22});gridLayerInstance.addTo(map);gridLayerInstance.bringToBack();if(customTileLayer&&customTileLayer.bringToFront)customTileLayer.bringToFront();}
+  else{if(gridLayerInstance&&map.hasLayer(gridLayerInstance))map.removeLayer(gridLayerInstance);}
+});
+function toDMS(deg,isLat){const abs=Math.abs(deg);const d=Math.floor(abs);const mF=(abs-d)*60;const m=Math.floor(mF);const s=Math.round((mF-m)*60);const h=isLat?(deg>=0?'N':'S'):(deg>=0?'E':'W');const pad=n=>String(n).padStart(2,'0');return `${d}°${pad(m)}'${pad(s)}"${h}`;}
+const CoordGridLayer=L.GridLayer.extend({
+  createTile:function(coords){
+    const tile=document.createElement('canvas');const size=this.getTileSize();tile.width=size.x;tile.height=size.y;const ctx=tile.getContext('2d');ctx.clearRect(0,0,size.x,size.y);
+    const nw=this._tileCoordsToBounds(coords).getNorthWest(),se=this._tileCoordsToBounds(coords).getSouthEast();
+    const linesPerTile=2;
+    ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=4;
+    for(let i=1;i<=linesPerTile;i++){const x=(size.x/(linesPerTile+1))*i;const y=(size.y/(linesPerTile+1))*i;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,size.y);ctx.stroke();ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(size.x,y);ctx.stroke();}
+    ctx.strokeStyle='#000';ctx.lineWidth=2;
+    for(let i=1;i<=linesPerTile;i++){const x=(size.x/(linesPerTile+1))*i;const y=(size.y/(linesPerTile+1))*i;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,size.y);ctx.stroke();ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(size.x,y);ctx.stroke();}
+    ctx.font='bold 11px monospace';ctx.fillStyle='#fff';ctx.strokeStyle='#000';ctx.lineWidth=3;
+    for(let i=1;i<=linesPerTile;i++){
+      const y=(size.y/(linesPerTile+1))*i;const lat=nw.lat+(se.lat-nw.lat)*(y/size.y);const txt=toDMS(lat,true);ctx.strokeText(txt,4,y-3);ctx.fillText(txt,4,y-3);
+      const x=(size.x/(linesPerTile+1))*i;const lon=nw.lng+(se.lng-nw.lng)*(x/size.x);const txt2=toDMS(lon,false);ctx.strokeText(txt2,x+3,14);ctx.fillText(txt2,x+3,14);
+    }
+    return tile;
+  }
+});
+let coordGridInstance=null;
+document.getElementById('sw-coordgrid').addEventListener('change',e=>{
+  if(e.target.checked){if(!coordGridInstance)coordGridInstance=new CoordGridLayer({minZoom:0,maxZoom:22,pane:'coordGridPane'});coordGridInstance.addTo(map);}
+  else{if(coordGridInstance&&map.hasLayer(coordGridInstance))map.removeLayer(coordGridInstance);}
+});
+
+let vector5Group=L.layerGroup();
+let vector6Group=L.layerGroup();
+let showVec5=false,showVec6=false;
+document.getElementById('sw-vect5').addEventListener('change',e=>{showVec5=e.target.checked;if(showVec5){if(!map.hasLayer(vector5Group))vector5Group.addTo(map);}else{if(map.hasLayer(vector5Group))map.removeLayer(vector5Group);}if(window.__navRefresh)window.__navRefresh();});
+document.getElementById('sw-vect6').addEventListener('change',e=>{showVec6=e.target.checked;if(showVec6){if(!map.hasLayer(vector6Group))vector6Group.addTo(map);}else{if(map.hasLayer(vector6Group))map.removeLayer(vector6Group);}if(window.__navRefresh)window.__navRefresh();});
+function drawVector(group,from,to,color,kind){
+  if(!group||!from||!to)return;
+  let dash=null;if(kind==='dot')dash='3 6';else if(kind==='dashdot')dash='8 4 2 4';
+  group.addLayer(L.polyline([[from.lat,from.lon],[to.lat,to.lon]],{color:'#000',weight:3,dashArray:dash,opacity:.9}));
+  group.addLayer(L.polyline([[from.lat,from.lon],[to.lat,to.lon]],{color:color,weight:1.5,dashArray:dash,opacity:1}));
+}
+window.__vectorGroups={get5:()=>vector5Group,get6:()=>vector6Group,show5:()=>showVec5,show6:()=>showVec6,drawVector};
+
+window.NavAPI={
+  getDevicePos:()=>currentPos,getRealGpsPos:()=>realGpsPos,
+  setDevicePos:(lat,lon)=>{
+    spoofPos={lat:normLat(lat),lon:normLon(lon)};currentPos={lat:spoofPos.lat,lon:spoofPos.lon};window.currentPos=currentPos;
+    lastTwoPositions.push({lat:currentPos.lat,lon:currentPos.lon});if(lastTwoPositions.length>2)lastTwoPositions.shift();
+    if(locationMarker)locationMarker.setLatLng([spoofPos.lat,spoofPos.lon]);
+    coordDevLat.textContent=spoofPos.lat.toFixed(6);coordDevLon.textContent=spoofPos.lon.toFixed(6);
+    if(UI.crosshairCentering)map.panTo([spoofPos.lat,spoofPos.lon],{animate:false});
+    refreshNavTables();
+  },
+  resetDevicePos:()=>{
+    spoofPos=null;
+    if(realGpsPos){currentPos={lat:realGpsPos.lat,lon:realGpsPos.lon};window.currentPos=currentPos;
+      if(locationMarker)locationMarker.setLatLng([realGpsPos.lat,realGpsPos.lon]);
+      coordDevLat.textContent=realGpsPos.lat.toFixed(6);coordDevLon.textContent=realGpsPos.lon.toFixed(6);
+      if(UI.crosshairCentering)map.panTo([realGpsPos.lat,realGpsPos.lon],{animate:false});
+      refreshNavTables();}
+  },
+  isSpoofed:()=>!!spoofPos,map,showToast,setInfo
+};
+
+let placesData=null,placesFileName=null;
+async function openPlacesPanel(){
+  if(!placesFileName){
+    const name=prompt('Файл в modules/ (например places.txt):','places.txt');
+    if(!name)return;placesFileName=name;
+  }
+  if(!placesData){
+    try{
+      setInfo(`загружаю ${placesFileName}…`);
+      const resp=await fetch('modules/'+placesFileName,{cache:'no-cache'});
+      if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
+      const txt=await resp.text();const lines=txt.split(/\r?\n/);
+      placesData=[];
+      for(const line of lines){if(!line.trim())continue;const f=line.split('\t');if(f.length<6)continue;
+        const lat=parseFloat(f[4]),lon=parseFloat(f[5]);if(!isFinite(lat)||!isFinite(lon))continue;
+        placesData.push({name:f[1]||'',alts:f[3]||'',lat,lon});}
+      setInfo(`файл объектов: ${placesData.length} записей`);
+    }catch(err){setInfo(`поиск: ${err.message}`,true);placesFileName=null;return;}
+  }
+  document.getElementById('places-panel').classList.add('open');
+  document.getElementById('places-input').value='';
+  document.getElementById('places-results').innerHTML='<div class="pp-empty">введите текст и нажмите «Поиск»</div>';
+}
+function searchPlaces(){
+  const q=(document.getElementById('places-input').value||'').trim().toLowerCase();
+  const box=document.getElementById('places-results');
+  if(!q){box.innerHTML='<div class="pp-empty">введите текст</div>';return;}
+  if(!placesData){box.innerHTML='<div class="pp-empty">файл не загружен</div>';return;}
+  const results=[];
+  for(const p of placesData){
+    const matches=[];
+    if(p.name.toLowerCase().includes(q))matches.push(p.name);
+    if(p.alts){for(const alt of p.alts.split(',')){const a=alt.trim();if(a.toLowerCase().includes(q))matches.push(a);}}
+    if(matches.length===0)continue;
+    const unique=[...new Set(matches)];
+    results.push({matches:unique,lat:p.lat,lon:p.lon});
+    if(results.length>=200)break;
+  }
+  if(results.length===0){box.innerHTML='<div class="pp-empty">не найдено</div>';return;}
+  box.innerHTML='';
+  for(const r of results){
+    const div=document.createElement('div');div.className='pp-result';
+    div.textContent=r.matches.join(' & ')+' | '+r.lat.toFixed(6)+', '+r.lon.toFixed(6);
+    div.addEventListener('click',()=>{
+      UI.crosshairCentering=false;
+      document.getElementById('sw-crosshair').checked=false;
+      map.setView([r.lat,r.lon],map.getZoom(),{animate:true});
+      showToast('переход к '+r.matches[0]);
+    });
+    box.appendChild(div);
+  }
+}
+document.getElementById('places-search').addEventListener('click',searchPlaces);
+document.getElementById('places-input').addEventListener('keydown',e=>{if(e.key==='Enter')searchPlaces();});
+document.getElementById('places-close').addEventListener('click',()=>{document.getElementById('places-panel').classList.remove('open');});
+(function bindSearchLongPress(){
+  const btn=document.getElementById('btn-azimuth');let timer=null,openedByLong=false;
+  function start(){openedByLong=false;timer=setTimeout(()=>{openedByLong=true;openPlacesPanel();},700);}
+  function cancel(){clearTimeout(timer);}
+  btn.addEventListener('touchstart',start,{passive:true});
+  btn.addEventListener('touchend',cancel);
+  btn.addEventListener('touchmove',cancel);
+  btn.addEventListener('mousedown',start);
+  btn.addEventListener('mouseup',cancel);
+  btn.addEventListener('mouseleave',cancel);
+  btn.addEventListener('click',e=>{if(openedByLong){e.stopImmediatePropagation();e.preventDefault();openedByLong=false;}},true);
+})();
+
+(function setupToolsPlaceholder(){
+  const box=document.getElementById('sub-tools');
+  fetch('modules/menu.html',{cache:'no-cache'}).then(r=>r.ok?r.text():null).then(html=>{
+    if(!html)return;box.innerHTML=html;
+    box.querySelectorAll('[data-module]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const path='modules/'+el.dataset.module;
+        const s=document.createElement('script');s.src=path;
+        s.onload=()=>{
+          showToast('модуль загружен: '+path);
+          const baseId=el.dataset.module.replace(/\.js$/,'');
+          const camel=baseId.replace(/-([a-z])/g,(_,c)=>c.toUpperCase());
+          const openFn=window['__'+camel+'Open']||window['__'+baseId.replace(/-/g,'')+'Open'];
+          if(typeof openFn==='function'){try{openFn();}catch(e){console.warn(e);}}
+        };
+        s.onerror=()=>{showToast('не удалось загрузить: '+path);};
+        document.body.appendChild(s);
+      });
+    });
+  }).catch(()=>{});
+})();
+
+function refreshNavTables(){if(typeof window.__navRefresh==='function'){window.__navRefresh();return;}}
+setInterval(()=>refreshNavTables(),1000);
+
+/* Применение физической ширины KML при зуме */
+map.on('zoomend', applyAllPhysicalWidths);
+
+updateScale();updateGrid();updateCircles();
+
+(function loadNav(){
+  const s=document.createElement('script');s.src='modules/nav.js';
+  s.onerror=()=>setInfo('modules/nav.js не найден (404)',true);
+  s.onload=()=>{if(window.NavCtl){setInfo('навигатор: готов (nav.js подключён)');}else{setInfo('nav.js загружен, но не выполнился',true);}};
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>
